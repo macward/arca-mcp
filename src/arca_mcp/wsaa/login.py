@@ -6,6 +6,7 @@ from arca_mcp.certificates.errors import CertificateLoadError, PrivateKeyLoadErr
 from arca_mcp.errors import ArcaErrorCause
 from arca_mcp.wsaa.client import WsaaEnvironment, call_login_cms, parse_login_ticket_response
 from arca_mcp.wsaa.models import SetupCheckResult, WsaaToken
+from arca_mcp.wsaa.services import ArcaService
 from arca_mcp.wsaa.signing import sign_tra
 from arca_mcp.wsaa.tra import build_tra
 
@@ -82,3 +83,29 @@ def validate_wsaa_login(
         ok=True,
         token=WsaaToken(token=token, sign=sign, generation_time=gen, expiration_time=exp),
     )
+
+
+def validate_service_authorization(
+    cert_path: Path,
+    key_path: Path,
+    service: str,
+    environment: WsaaEnvironment = WsaaEnvironment.HOMOLOGACION,
+) -> SetupCheckResult:
+    """Verifica que el certificado tenga acceso autorizado a un servicio ARCA.
+
+    Acepta cualquier string como servicio. Si querés autocompletar contra los
+    servicios más comunes, usá el enum `ArcaService`.
+
+    Si WSAA responde con éxito → el cert tiene acceso autorizado.
+    Si WSAA rechaza con "computador no autorizado" o "alias no registrado"
+    → SERVICE_UNAUTHORIZED.
+    """
+    if not service or not service.strip():
+        return SetupCheckResult(
+            ok=False,
+            cause=ArcaErrorCause.SERVICE_UNAUTHORIZED,
+            message="El servicio no puede estar vacío",
+        )
+
+    return validate_wsaa_login(cert_path, key_path, service=service, environment=environment)
+
