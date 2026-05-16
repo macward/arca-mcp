@@ -1,0 +1,11 @@
+services:
+  arca-mcp:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Certificados montados desde el host, nunca copiados en la imagen
+      - ${CERTS_DIR:-./certs}:/certs:ro
+    restart: unless-stopped

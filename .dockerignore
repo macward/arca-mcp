@@ -1,0 +1,15 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+*.key
+*.pem
+*.p12
+*.pfx
+certs/
+.git/
+.pytest_cache/
+dist/
+*.egg-info/
+tests/
+docs/
