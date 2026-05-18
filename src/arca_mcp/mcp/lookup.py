@@ -8,6 +8,7 @@ from arca_mcp.config import resolve_runtime_config
 from arca_mcp.errors import ArcaError, ArcaErrorCause
 from arca_mcp.padron import client as padron_client
 from arca_mcp.padron.models import PersonaDetails, TaxpayerStatus
+from arca_mcp.validation import catalogs
 from arca_mcp.wsfe import client as wsfe_client
 from arca_mcp.wsfe.models import CatalogItem
 from arca_mcp.wsaa import WsaaEnvironment, validate_wsaa_login
@@ -217,3 +218,42 @@ def validate_taxpayer_status(cuit: str) -> TaxpayerStatus | ArcaError:
         active=persona_result.status == "ACTIVO",
         status_description=persona_result.status,
     )
+
+
+@server.tool
+def validate_invoice_type(invoice_type: str) -> dict:
+    """Valida si un tipo de comprobante es válido según catálogo AFIP.
+
+    No requiere certificado ni conexión a ARCA — validación 100% local.
+
+    Args:
+        invoice_type: Código numérico del tipo de comprobante (ej: "1" para Factura A).
+    """
+    valid = catalogs.is_valid_invoice_type(invoice_type)
+    return {"invoice_type": invoice_type, "valid": valid}
+
+
+@server.tool
+def validate_vat_condition(vat_condition: str) -> dict:
+    """Valida si una condición frente al IVA es válida según catálogo AFIP.
+
+    No requiere certificado ni conexión a ARCA — validación 100% local.
+
+    Args:
+        vat_condition: Código numérico de la condición IVA (ej: "1" para Responsable Inscripto).
+    """
+    valid = catalogs.is_valid_vat_condition(vat_condition)
+    return {"vat_condition": vat_condition, "valid": valid}
+
+
+@server.tool
+def validate_currency(currency: str) -> dict:
+    """Valida si un código de moneda es válido según catálogo AFIP.
+
+    No requiere certificado ni conexión a ARCA — validación 100% local.
+
+    Args:
+        currency: Código de moneda AFIP (ej: "PES" para Pesos, "DOL" para Dólar).
+    """
+    valid = catalogs.is_valid_currency(currency)
+    return {"currency": currency, "valid": valid}
