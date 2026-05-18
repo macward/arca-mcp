@@ -12,6 +12,7 @@ from arca_mcp.wsaa.client import (
 )
 from arca_mcp.wsaa.models import SetupCheckResult, WsaaToken
 from arca_mcp.wsaa.signing import sign_tra
+from arca_mcp.wsaa.token_cache import TokenCache
 from arca_mcp.wsaa.tra import build_tra
 
 
@@ -20,6 +21,7 @@ def validate_wsaa_login(
     key_path: Path,
     service: str = "wsfe",
     environment: WsaaEnvironment = WsaaEnvironment.HOMOLOGACION,
+    cuit: str | None = None,
 ) -> SetupCheckResult:
     """Ejecuta el flujo completo de login WSAA y retorna el resultado.
 
@@ -27,6 +29,9 @@ def validate_wsaa_login(
     - Lo firma con CMS usando cert + key
     - Lo envía a WSAA homologación o producción
     - Parsea la respuesta y retorna el token + sign
+
+    Si `cuit` se provee, se consulta el caché filesystem antes del login de red
+    y se persiste el token obtenido.
 
     Si algún paso falla, retorna SetupCheckResult.ok=False con la causa.
     """
@@ -38,6 +43,21 @@ def validate_wsaa_login(
             message=f"Token WSAA cacheado para servicio {service!r}.",
             token=WsaaToken(token=token, sign=sign, generation_time="cached", expiration_time="cached"),
         )
+
+    fs_cache: TokenCache | None = None
+    if cuit is not None:
+        fs_cache = TokenCache()
+        cached_token = fs_cache.get(cuit)
+        if cached_token is not None:
+            token_store.put_token(
+                str(cert_path), str(key_path), str(environment), str(service),
+                cached_token.token, cached_token.sign, cached_token.expiration_time,
+            )
+            return SetupCheckResult(
+                ok=True,
+                message=f"Token WSAA restaurado del caché para servicio {service!r}.",
+                token=cached_token,
+            )
 
     try:
         tra = build_tra(service)
@@ -89,7 +109,7 @@ def validate_wsaa_login(
                 message=(
                     f"WSAA confirma auth previa válida para {service!r} "
                     "(no se re-emite token mientras el TA anterior siga vivo). "
-                    "Caché de token llegará en v0.3."
+                    "Proveer el parámetro `cuit` para usar el caché filesystem."
                 ),
             )
         cause = ArcaErrorCause.WSAA_AUTH_FAILED
@@ -106,12 +126,12 @@ def validate_wsaa_login(
             message=f"Error parseando respuesta WSAA: {e}",
         )
 
+    wsaa_token = WsaaToken(token=token, sign=sign, generation_time=gen, expiration_time=exp)
     token_store.put_token(str(cert_path), str(key_path), str(environment), str(service), token, sign, exp)
+    if fs_cache is not None and cuit is not None:
+        fs_cache.save(cuit, wsaa_token)
 
-    return SetupCheckResult(
-        ok=True,
-        token=WsaaToken(token=token, sign=sign, generation_time=gen, expiration_time=exp),
-    )
+    return SetupCheckResult(ok=True, token=wsaa_token)
 
 
 def validate_service_authorization(
