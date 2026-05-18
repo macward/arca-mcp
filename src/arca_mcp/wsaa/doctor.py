@@ -9,7 +9,7 @@ from arca_mcp.certificates import (
 )
 from arca_mcp.errors import ArcaErrorCause
 from arca_mcp.wsaa.client import WsaaEnvironment
-from arca_mcp.wsaa.login import validate_service_authorization, validate_wsaa_login
+from arca_mcp.wsaa.login import validate_wsaa_login
 
 
 class NamedCheck(BaseModel):
@@ -82,11 +82,17 @@ def run_setup_doctor(
         checks.append(_skipped("service_authorization", "saltado por fallo en wsaa_login"))
         return SetupDoctorReport(checks=checks, all_ok=False, failed_check=failed)
 
-    # 5. service authorization (mismo flujo que wsaa_login, ya se sabe que funciona)
-    s = validate_service_authorization(cert_path, key_path, service=service, environment=environment)
-    checks.append(NamedCheck(name="service_authorization", ok=s.ok, cause=s.cause, message=s.message))
-    if not s.ok:
-        failed = "service_authorization"
-        return SetupDoctorReport(checks=checks, all_ok=False, failed_check=failed)
+    # 5. service authorization — derivado del wsaa_login exitoso.
+    # No re-llamamos a WSAA: el login para el servicio X demuestra que el cert
+    # está autorizado a X. Además AFIP rate-limita TA requests (mientras hay un
+    # TA válido devuelve "El CEE ya posee un TA valido"), así que una segunda
+    # llamada en frío rompería sin agregar información.
+    checks.append(
+        NamedCheck(
+            name="service_authorization",
+            ok=True,
+            message=f"derivado del wsaa_login exitoso para servicio {service!r}",
+        )
+    )
 
     return SetupDoctorReport(checks=checks, all_ok=True)

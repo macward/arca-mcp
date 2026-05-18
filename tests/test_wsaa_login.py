@@ -97,3 +97,19 @@ def test_login_generic_soap_fault(cert_key_pair, mocker):
     result = validate_wsaa_login(cert_path, key_path)
     assert result.ok is False
     assert result.cause == ArcaErrorCause.WSAA_AUTH_FAILED
+
+
+def test_login_ta_already_valid_is_success(cert_key_pair, mocker):
+    """WSAA rechaza re-emitir TA mientras uno está vivo. Semánticamente es éxito."""
+    cert_path, key_path = cert_key_pair
+    mocker.patch(
+        "arca_mcp.wsaa.login.call_login_cms",
+        side_effect=ValueError(
+            "WSAA SOAP Fault: El CEE ya posee un TA valido para el acceso al WSN solicitado"
+        ),
+    )
+
+    result = validate_wsaa_login(cert_path, key_path, service="wsfe")
+    assert result.ok is True
+    assert result.token is None  # no se re-emitió, no hay token nuevo
+    assert "auth previa válida" in result.message

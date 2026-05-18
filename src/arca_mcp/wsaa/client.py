@@ -55,21 +55,34 @@ def call_login_cms(
         else:
             assert last_exc is not None
             raise last_exc
+
+    # WSAA devuelve SOAP Faults dentro de HTTP 500 con el detalle real
+    # (ej. "Computador no autorizado a acceder al servicio"). Hay que parsear
+    # el body antes de raise_for_status() para no perder el mensaje legible.
+    fault_string = _extract_soap_fault(response.content)
+    if fault_string is not None:
+        raise ValueError(f"WSAA SOAP Fault: {fault_string}")
+
     response.raise_for_status()
 
     root = etree.fromstring(response.content)
-
-    ns = {"soapenv": "http://schemas.xmlsoap.org/soap/envelope/"}
-    fault = root.find(".//soapenv:Fault", ns)
-    if fault is not None:
-        fault_string = fault.findtext("faultstring") or "Fault sin detalle"
-        raise ValueError(f"WSAA SOAP Fault: {fault_string}")
-
     login_response = root.find(".//{*}loginCmsReturn")
     if login_response is None or login_response.text is None:
         raise ValueError("Respuesta WSAA sin loginCmsReturn")
 
     return login_response.text
+
+
+def _extract_soap_fault(content: bytes) -> str | None:
+    """Devuelve el faultstring si el body es un SOAP Fault, None en caso contrario."""
+    try:
+        root = etree.fromstring(content)
+    except etree.XMLSyntaxError:
+        return None
+    fault = root.find(".//{http://schemas.xmlsoap.org/soap/envelope/}Fault")
+    if fault is None:
+        return None
+    return fault.findtext("faultstring") or "Fault sin detalle"
 
 
 def parse_login_ticket_response(xml: str) -> tuple[str, str, str, str]:

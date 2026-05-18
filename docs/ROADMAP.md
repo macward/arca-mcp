@@ -61,9 +61,9 @@
 - [x] Build Docker (multi-stage) + `docker-compose.yml` con `:ro` en `/certs`
 - [x] Soporte transportes `stdio` y `streamable-http`
 - [x] Documentación técnica completa (`docs/v0_documento_tecnico.md`)
-- [ ] **Pendiente para cierre formal:** E2E test opt-in contra `wsaahomo.afip.gov.ar` (skip si no hay cert). Hoy todos los tests de WSAA son unit con mocks.
+- [x] E2E test opt-in contra `wsaahomo.afip.gov.ar` (cerrado en `v0.1.2`, 2026-05-18 — verificado contra cert real de homologación)
 
-> Nota: v0.1 está funcionalmente completo pero el criterio E2E queda abierto. Convendría cerrarlo como `v0.1.1` antes de seguir.
+> v0.1 cerrada formalmente en `v0.1.2`. Próximo movimiento: v0.2 (Lookup Layer).
 
 ---
 

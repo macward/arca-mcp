@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_Próxima entrega: `v0.1.2` (cierre del criterio E2E de v0.1 contra wsaahomo) o `v0.2.0` (Lookup Layer)._
+_Próxima entrega: `v0.2.0` (Lookup Layer) — bloqueado por la decisión de modelo de configuración (task meridian `6eff2b81-...`)._
+
+## [0.1.2] - 2026-05-18
+
+### Added
+- **E2E test opt-in contra `wsaahomo.afip.gov.ar`** (`tests/test_e2e_wsaa.py`) — cierra el último criterio pendiente de v0.1. Skip automático si `ARCA_TEST_CERT_PATH` / `ARCA_TEST_KEY_PATH` no están seteados. Marker `e2e` para excluirlo del run normal (`pytest -m "not e2e"`).
+- Test de regresión: SOAP Fault dentro de HTTP 500 se parsea correctamente (`test_call_login_cms_parses_soap_fault_inside_http_500`).
+- Test: "El CEE ya posee un TA valido" se interpreta como éxito (`test_login_ta_already_valid_is_success`).
+
+### Changed
+- **`call_login_cms` parsea SOAP Faults dentro de HTTP 500** antes de `raise_for_status()`. Antes perdíamos el faultstring legible (AFIP devuelve detalles como "Computador no autorizado a acceder al servicio" dentro del 500). Esto cumple el principio del CLAUDE.md de transformar errores opacos en mensajes legibles.
+- **`run_setup_doctor` no hace llamada redundante a WSAA** para `service_authorization`. La autorización se deriva del éxito de `wsaa_login` para el mismo servicio. Antes, la segunda llamada rompía con "El CEE ya posee un TA valido" porque AFIP rate-limita TA requests.
+- **`validate_wsaa_login` interpreta "ya posee un TA valido" como éxito** (sin token, con mensaje explicativo). Resolución definitiva requiere caché de token, planificada para v0.3.
+
+### Tests
+- 71 → 74 unit tests (todos verdes)
+- 1 E2E test opt-in verificado contra wsaahomo real (5/5 checks ✅)
 
 ## [0.1.1] - 2026-05-17
 

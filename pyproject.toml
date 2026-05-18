@@ -1,6 +1,6 @@
 [project]
 name = "arca-mcp"
-version = "0.1.1"
+version = "0.1.2"
 description = "MCP server for ARCA/AFIP fiscal operations"
 requires-python = ">=3.12"
 dependencies = [
@@ -36,6 +36,9 @@ dev-dependencies = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "e2e: tests que pegan a wsaahomo.afip.gov.ar (requieren ARCA_TEST_CERT_PATH y ARCA_TEST_KEY_PATH; skip si no están)",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]

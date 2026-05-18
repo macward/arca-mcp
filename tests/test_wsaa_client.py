@@ -123,6 +123,47 @@ def test_call_login_cms_raises_after_exhausting_retries(mocker):
         call_login_cms("CMS", "https://example/LoginCms", retries=2)
 
 
+def test_call_login_cms_parses_soap_fault_inside_http_500(mocker):
+    """Regresión: AFIP devuelve SOAP Faults dentro de HTTP 500 con el detalle real.
+    Antes perdíamos el mensaje porque raise_for_status() corría antes del parseo."""
+    AFIP_FAULT_500 = """<?xml version="1.0" encoding="utf-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+  <soapenv:Body>
+    <soapenv:Fault>
+      <faultcode xmlns:ns1="http://xml.apache.org/axis/">ns1:coe.notAuthorized</faultcode>
+      <faultstring>Computador no autorizado a acceder al servicio</faultstring>
+    </soapenv:Fault>
+  </soapenv:Body>
+</soapenv:Envelope>"""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, content=AFIP_FAULT_500)
+
+    real_client = httpx.Client
+    mocker.patch(
+        "arca_mcp.wsaa.client.httpx.Client",
+        side_effect=lambda *a, **kw: real_client(*a, **{**kw, "transport": _mock_transport(handler)}),
+    )
+
+    with pytest.raises(ValueError, match="Computador no autorizado"):
+        call_login_cms("CMS", "https://example/LoginCms")
+
+
+def test_call_login_cms_raises_http_error_when_500_without_fault(mocker):
+    """Si el 500 no es un SOAP Fault, debe burbujear como HTTPStatusError."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, content=b"<html>Internal Server Error</html>")
+
+    real_client = httpx.Client
+    mocker.patch(
+        "arca_mcp.wsaa.client.httpx.Client",
+        side_effect=lambda *a, **kw: real_client(*a, **{**kw, "transport": _mock_transport(handler)}),
+    )
+
+    with pytest.raises(httpx.HTTPStatusError):
+        call_login_cms("CMS", "https://example/LoginCms")
+
+
 def test_call_login_cms_does_not_retry_on_soap_fault(mocker):
     calls = {"n": 0}
 

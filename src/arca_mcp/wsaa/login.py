@@ -65,8 +65,22 @@ def validate_wsaa_login(
     except ValueError as e:
         # SOAP Fault o respuesta inválida
         msg = str(e)
+        msg_lower = msg.lower()
+        # WSAA rate-limita: si ya emitió un TA vivo para este servicio, rechaza
+        # nuevos pedidos. Semánticamente es éxito (el auth funciona), pero no
+        # tenemos token porque WSAA no lo re-emite. Resolverlo bien requiere
+        # caché de token (v0.3); por ahora lo reportamos como ok con mensaje.
+        if "ya posee un ta valido" in msg_lower or "ya posee un ta válido" in msg_lower:
+            return SetupCheckResult(
+                ok=True,
+                message=(
+                    f"WSAA confirma auth previa válida para {service!r} "
+                    "(no se re-emite token mientras el TA anterior siga vivo). "
+                    "Caché de token llegará en v0.3."
+                ),
+            )
         cause = ArcaErrorCause.WSAA_AUTH_FAILED
-        if "computador no autorizado" in msg.lower() or "alias" in msg.lower():
+        if "computador no autorizado" in msg_lower or "alias" in msg_lower:
             cause = ArcaErrorCause.SERVICE_UNAUTHORIZED
         return SetupCheckResult(ok=False, cause=cause, message=msg)
 
