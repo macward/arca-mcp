@@ -73,6 +73,6 @@ El ambiente debe ser siempre explícito en configuración; nunca inferido.
 | v1.0 | Producción + Playwright | ⏳ | Producción habilitada + automatización del portal ARCA |
 
 **Fuente de verdad:** `docs/ROADMAP.md` (scope, criterios de aceptación, dependencias por fase).
-**Diseño estratégico:** `~/Developer/3_RESEARCH/Obsidian/1_Projects/ArcaMCP/00 Verticales y Roadmap.md`.
+**Diseño estratégico:** meridian → `arca-mcp/research/verticales-y-roadmap-estrategico.md`.
 
 **Wedge estratégico:** "hacer usable ARCA para developers y agentes", no "AI para impuestos". Fuera de scope inicial: WSMTXCA, Factura MiPyME, Exportación, Agro, SIRE.
