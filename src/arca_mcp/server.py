@@ -4,7 +4,7 @@ import os
 import fastmcp
 
 from arca_mcp.config import init_server_settings
-from arca_mcp.mcp import certificates, setup
+from arca_mcp.mcp import certificates, lookup, setup
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,7 @@ mcp = fastmcp.FastMCP(
 
 mcp.mount(certificates.server)
 mcp.mount(setup.server)
+mcp.mount(lookup.server)
 
 
 def main() -> None:
