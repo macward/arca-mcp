@@ -144,7 +144,7 @@
 - [ ] Cada call WSAA emite un log JSON con: `ts`, `cuit`, `service`, `latency_ms`, `result` (`ok` | `cached` | `retried` | `failed`)
 - [ ] Test de concurrencia: 10 sesiones simultáneas comparten el mismo token sin race condition
 - [ ] Test de expiración: simular reloj del sistema y confirmar refresh
-- [ ] Documento de operaciones: cómo limpiar el caché, cómo rotar certificados sin downtime
+- [ ] Documento de operaciones: cómo limpiar el caché, cómo rotar certificados sin downtime → [`docs/operations-v0.3-wsaa-cache.md`](operations-v0.3-wsaa-cache.md)
 
 ### Dependencias
 
