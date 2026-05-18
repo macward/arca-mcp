@@ -104,7 +104,7 @@ def test_call_login_cms_retries_on_transient_error(mocker):
         side_effect=lambda *a, **kw: real_client(*a, **{**kw, "transport": _mock_transport(handler)}),
     )
 
-    result = call_login_cms("CMS", "https://example/LoginCms", retries=1)
+    result = call_login_cms("CMS", "https://example/LoginCms", max_attempts=2)
     assert "loginTicketResponse" in result
     assert calls["n"] == 2
 
@@ -120,7 +120,7 @@ def test_call_login_cms_raises_after_exhausting_retries(mocker):
     )
 
     with pytest.raises(httpx.ConnectError):
-        call_login_cms("CMS", "https://example/LoginCms", retries=2)
+        call_login_cms("CMS", "https://example/LoginCms", max_attempts=3)
 
 
 def test_call_login_cms_parses_soap_fault_inside_http_500(mocker):
@@ -178,5 +178,5 @@ def test_call_login_cms_does_not_retry_on_soap_fault(mocker):
     )
 
     with pytest.raises(ValueError, match="SOAP Fault"):
-        call_login_cms("CMS", "https://example/LoginCms", retries=3)
+        call_login_cms("CMS", "https://example/LoginCms", max_attempts=4)
     assert calls["n"] == 1

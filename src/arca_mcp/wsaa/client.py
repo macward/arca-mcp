@@ -3,6 +3,8 @@ from enum import StrEnum
 import httpx
 from lxml import etree
 
+from arca_mcp.wsaa.retry import with_retry
+
 
 class WsaaEnvironment(StrEnum):
     HOMOLOGACION = "https://wsaahomo.afip.gov.ar/ws/services/LoginCms"
@@ -20,19 +22,16 @@ SOAP_ENVELOPE_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 </soapenv:Envelope>"""
 
 
-_TRANSIENT_ERRORS = (httpx.ConnectError, httpx.TimeoutException)
-
-
 def call_login_cms(
     cms_b64: str,
     endpoint: str,
     timeout: float = 30.0,
-    retries: int = 1,
+    max_attempts: int = 2,
 ) -> str:
     """Llama al método loginCms de WSAA y retorna el XML del loginTicketResponse.
 
-    `retries` es el número de reintentos adicionales ante fallos transitorios
-    de red (`ConnectError`, `TimeoutException`). Total de intentos = retries + 1.
+    Reintenta ante fallos transitorios de red con backoff exponencial (100ms → 500ms).
+    `max_attempts=2` significa 1 intento inicial + 1 reintento.
 
     Lanza httpx.HTTPError si la conexión falla tras los reintentos.
     Lanza ValueError si WSAA devuelve un SOAP Fault.
@@ -43,18 +42,11 @@ def call_login_cms(
         "SOAPAction": "",
     }
 
-    attempts = max(retries, 0) + 1
-    last_exc: Exception | None = None
     with httpx.Client(verify=True, timeout=timeout) as client:
-        for _ in range(attempts):
-            try:
-                response = client.post(endpoint, content=body, headers=headers)
-                break
-            except _TRANSIENT_ERRORS as exc:
-                last_exc = exc
-        else:
-            assert last_exc is not None
-            raise last_exc
+        response = with_retry(
+            lambda: client.post(endpoint, content=body, headers=headers),
+            max_attempts=max_attempts,
+        )
 
     # WSAA devuelve SOAP Faults dentro de HTTP 500 con el detalle real
     # (ej. "Computador no autorizado a acceder al servicio"). Hay que parsear
