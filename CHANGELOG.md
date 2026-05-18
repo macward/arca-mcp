@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-18
+
+### Added
+- Token cache WSAA en memoria (`wsaa/token_store.py`) — evita re-login dentro de la sesión de proceso
+- Cliente SOAP WSFEv1 paramétricas (`wsfe/client.py`) — 5 consultas de catálogo (tipos de comprobante, documento, tributo, alícuota y moneda)
+- Cliente SOAP padrón A4 (`padron/client.py`) — consulta de contribuyentes por CUIT contra `ws_sr_padron_a4`
+- 10 tools MCP en `mcp/lookup.py`: 5 de catálogo WSFEv1, 2 de padrón (`get_taxpayer_details`, `validate_taxpayer_status`), 3 de validación pura (`validate_invoice_type`, `validate_vat_condition`, `validate_currency`)
+- Validaciones puras de catálogos AFIP sin red (`validation/catalogs.py`) — tipos de comprobante, condiciones IVA y monedas hardcodeados
+- Tests E2E opt-in en `tests/e2e/test_lookup_e2e.py` con `pytest.mark.e2e` — skip automático si no hay cert/key/CUIT configurados
+
 ### Changed (breaking)
 - **7 tools MCP ahora aceptan `cert_path` / `key_path` como overrides opcionales** en lugar de parámetros requeridos. Si no se pasan, el resolver central (`resolve_runtime_config`) los toma de `Settings` (env vars `ARCA_CERT_PATH` / `ARCA_KEY_PATH`). Si tampoco están en Settings, la tool retorna `ArcaError` con causa `MISSING_CONFIG` en lugar de fallar con error de parámetro.
 - Overrides parciales (solo `cert_path` o solo `key_path`) retornan `ArcaError` con causa `INVALID_CONFIG_OVERRIDE`.
@@ -14,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Las tools afectadas: `validate_certificate`, `validate_private_key`, `validate_cert_key_match`, `inspect_certificate`, `validate_wsaa_login`, `validate_service_authorization`, `setup_doctor`.
 
 ### Tests
-- 102 unit tests pasando (antes 74 — se sumaron los tests del resolver introducidos en la tarea anterior)
+- 292 tests pasando (293 collected, 1 skipped — E2E sin credenciales)
 
 ## [0.1.2] - 2026-05-18
 
