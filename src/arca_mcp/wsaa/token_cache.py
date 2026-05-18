@@ -1,6 +1,7 @@
 """Filesystem cache for WSAA tokens.
 
 One JSON file per CUIT at {cache_dir}/{cuit}.json (default: ~/.arca-mcp/tokens/).
+Override the default with the ARCA_TOKEN_CACHE_DIR environment variable.
 File permissions: 0600. Directory permissions: 0700.
 A token is a miss if expired OR if it expires within the refresh threshold (default 10 min).
 
@@ -11,13 +12,23 @@ so that only one coroutine performs the login when multiple hit a cache miss sim
 import asyncio
 import datetime
 import json
+import os
 from collections.abc import Callable
 from pathlib import Path
 
 from arca_mcp.wsaa.models import WsaaToken
 
 _DEFAULT_CACHE_DIR = Path.home() / ".arca-mcp" / "tokens"
-_DEFAULT_REFRESH_THRESHOLD = datetime.timedelta(minutes=10)
+_ENV_VAR = "ARCA_TOKEN_CACHE_DIR"
+
+
+def _resolve_cache_dir(explicit: Path | None) -> Path:
+    if explicit is not None:
+        return explicit
+    env = os.environ.get(_ENV_VAR)
+    if env:
+        return Path(env)
+    return _DEFAULT_CACHE_DIR
 
 
 class TokenCache:
@@ -27,10 +38,25 @@ class TokenCache:
         refresh_threshold_minutes: int = 10,
         _now: Callable[[], datetime.datetime] | None = None,
     ) -> None:
-        self._cache_dir = cache_dir or _DEFAULT_CACHE_DIR
+        self._cache_dir = _resolve_cache_dir(cache_dir)
         self._refresh_threshold = datetime.timedelta(minutes=refresh_threshold_minutes)
         self._now = _now or (lambda: datetime.datetime.now(datetime.timezone.utc))
         self._locks: dict[str, asyncio.Lock] = {}
+        self._ensure_cache_dir()
+
+    def _ensure_cache_dir(self) -> None:
+        try:
+            self._cache_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        except OSError as e:
+            raise ValueError(
+                f"No se puede crear el directorio de caché de tokens "
+                f"'{self._cache_dir}': {e}"
+            ) from e
+        if not os.access(self._cache_dir, os.W_OK):
+            raise ValueError(
+                f"El directorio de caché de tokens '{self._cache_dir}' no es escribible. "
+                f"Verificá permisos o configurá {_ENV_VAR} con un path alternativo."
+            )
 
     def _path(self, cuit: str) -> Path:
         return self._cache_dir / f"{cuit}.json"
