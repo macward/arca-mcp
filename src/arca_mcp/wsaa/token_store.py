@@ -15,7 +15,7 @@ _STORE: dict[
     tuple[str, str, datetime.datetime],
 ] = {}
 
-_VALIDITY_BUFFER = datetime.timedelta(minutes=5)
+_VALIDITY_BUFFER = datetime.timedelta(minutes=10)
 
 
 def _to_aware_utc(value: datetime.datetime | str) -> datetime.datetime:

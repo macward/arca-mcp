@@ -92,3 +92,63 @@ class TestTokenCacheInvalidate:
 
     def test_invalidate_nonexistent_is_noop(self, cache: TokenCache):
         cache.invalidate(CUIT)  # must not raise
+
+
+class TestAutoRefresh:
+    """Proactive refresh when token is within the 10-min threshold."""
+
+    def _cache_at(self, tmp_path: Path, fixed_now: datetime.datetime) -> TokenCache:
+        return TokenCache(
+            cache_dir=tmp_path / "tokens",
+            _now=lambda: fixed_now,
+        )
+
+    def test_token_9_min_from_expiry_is_miss(self, tmp_path: Path):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        token = _make_token(now + datetime.timedelta(minutes=9))
+        cache = self._cache_at(tmp_path, now)
+        cache.save(CUIT, token)
+        assert cache.get(CUIT) is None
+
+    def test_token_11_min_from_expiry_is_hit(self, tmp_path: Path):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        token = _make_token(now + datetime.timedelta(minutes=11))
+        cache = self._cache_at(tmp_path, now)
+        cache.save(CUIT, token)
+        result = cache.get(CUIT)
+        assert result is not None
+        assert result.token == token.token
+
+    def test_is_near_expiry_true_within_threshold(self, tmp_path: Path):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        cache = self._cache_at(tmp_path, now)
+        token = _make_token(now + datetime.timedelta(minutes=5))
+        assert cache.is_near_expiry(token) is True
+
+    def test_is_near_expiry_false_outside_threshold(self, tmp_path: Path):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        cache = self._cache_at(tmp_path, now)
+        token = _make_token(now + datetime.timedelta(minutes=15))
+        assert cache.is_near_expiry(token) is False
+
+    def test_custom_threshold_respected(self, tmp_path: Path):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        cache = TokenCache(
+            cache_dir=tmp_path / "tokens",
+            refresh_threshold_minutes=5,
+            _now=lambda: now,
+        )
+        token = _make_token(now + datetime.timedelta(minutes=7))
+        cache.save(CUIT, token)
+        # 7 min > 5 min threshold → still valid
+        assert cache.get(CUIT) is not None
+
+    def test_near_expiry_file_not_deleted(self, tmp_path: Path):
+        """Near-expiry token stays on disk so a fresh token can overwrite it."""
+        now = datetime.datetime.now(datetime.timezone.utc)
+        token = _make_token(now + datetime.timedelta(minutes=9))
+        cache = self._cache_at(tmp_path, now)
+        cache.save(CUIT, token)
+        cache.get(CUIT)
+        # File should still exist (unlike expired tokens which get evicted)
+        assert cache._path(CUIT).exists()

@@ -1,9 +1,14 @@
+import datetime
+from pathlib import Path
+
 import httpx
 import pytest
 
 from arca_mcp.errors import ArcaErrorCause
 from arca_mcp.wsaa import token_store
 from arca_mcp.wsaa.login import validate_wsaa_login
+from arca_mcp.wsaa.models import WsaaToken
+from arca_mcp.wsaa.token_cache import TokenCache
 
 SUCCESS_RESPONSE = """<?xml version="1.0"?>
 <loginTicketResponse>
@@ -136,3 +141,75 @@ def test_login_ta_already_valid_is_success(cert_key_pair, mocker):
     assert result.ok is True
     assert result.token is None  # no se re-emitió, no hay token nuevo
     assert "auth previa válida" in result.message
+
+
+def test_filesystem_cache_expired_token_triggers_relogin(cert_key_pair, mocker, tmp_path):
+    """Token vencido en disco al arrancar → re-login transparente y persiste el nuevo token."""
+    cert_path, key_path = cert_key_pair
+    cuit = "20123456789"
+    cache_dir = tmp_path / "tokens"
+
+    # Pre-seed an expired token in the filesystem cache
+    expired_token = WsaaToken(
+        token="old-token",
+        sign="old-sign",
+        generation_time="2020-01-01T00:00:00+00:00",
+        expiration_time="2020-01-01T12:00:00+00:00",
+    )
+    fs_cache = TokenCache(cache_dir=cache_dir)
+    fs_cache.save(cuit, expired_token)
+
+    call_login = mocker.patch(
+        "arca_mcp.wsaa.login.call_login_cms",
+        return_value=SUCCESS_RESPONSE,
+    )
+    mocker.patch(
+        "arca_mcp.wsaa.login.TokenCache",
+        return_value=fs_cache,
+    )
+
+    result = validate_wsaa_login(cert_path, key_path, cuit=cuit)
+
+    assert result.ok is True
+    assert result.token is not None
+    assert result.token.token == "TOKEN123"
+    assert call_login.call_count == 1
+
+    # New token must be persisted to disk
+    refreshed = fs_cache.get(cuit)
+    assert refreshed is not None
+    assert refreshed.token == "TOKEN123"
+
+
+def test_filesystem_cache_near_expiry_triggers_relogin(cert_key_pair, mocker, tmp_path):
+    """Token expiring in < 10 min → proactive refresh even if not yet expired."""
+    cert_path, key_path = cert_key_pair
+    cuit = "20123456789"
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    fs_cache = TokenCache(
+        cache_dir=tmp_path / "tokens",
+        _now=lambda: now,
+    )
+    near_expiry_token = WsaaToken(
+        token="almost-expired-token",
+        sign="s",
+        generation_time=now.isoformat(),
+        expiration_time=(now + datetime.timedelta(minutes=9)).isoformat(),
+    )
+    fs_cache.save(cuit, near_expiry_token)
+
+    call_login = mocker.patch(
+        "arca_mcp.wsaa.login.call_login_cms",
+        return_value=SUCCESS_RESPONSE,
+    )
+    mocker.patch(
+        "arca_mcp.wsaa.login.TokenCache",
+        return_value=fs_cache,
+    )
+
+    result = validate_wsaa_login(cert_path, key_path, cuit=cuit)
+
+    assert result.ok is True
+    assert result.token.token == "TOKEN123"
+    assert call_login.call_count == 1
