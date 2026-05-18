@@ -19,9 +19,8 @@ from typing import Union
 
 from pydantic import BaseModel, ConfigDict
 
-from arca_mcp.config_settings import Settings
+from arca_mcp.config_settings import Settings, Environment
 from arca_mcp.errors import ArcaError, ArcaErrorCause
-from arca_mcp.config_settings import Environment
 
 
 class RuntimeConfig(BaseModel):
@@ -68,7 +67,16 @@ def resolve_runtime_config(
     Returns:
         RuntimeConfig validada, o ArcaError con cause estructurado.
     """
-    settings = _settings if _settings is not None else Settings()
+    if _settings is not None:
+        settings = _settings
+    else:
+        # Preferir el singleton del servidor (inicializado una vez en startup).
+        # Si no está inicializado (ej. llamada directa en tests), crear instancia temporal.
+        try:
+            from arca_mcp.config import get_server_settings
+            settings = get_server_settings()
+        except RuntimeError:
+            settings = Settings()
     ov = overrides or ConfigOverrides()
 
     # --- Validar override de paths: deben ir juntos o ninguno ---
