@@ -16,3 +16,9 @@ class PersonaDetails(BaseModel):
     status: str                # estadoClave: "ACTIVO", "INACTIVO", etc.
     fiscal_address: Optional[FiscalAddress] = None
     activities: list[str] = []  # códigos de actividad AFIP
+
+
+class TaxpayerStatus(BaseModel):
+    cuit: str
+    active: bool
+    status_description: str

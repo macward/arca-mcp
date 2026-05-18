@@ -1,4 +1,4 @@
-"""Tools MCP para consultas de catálogos WSFEv1 (FEParamGet*)."""
+"""Tools MCP para consultas de catálogos WSFEv1 (FEParamGet*) y padrón A4."""
 
 from __future__ import annotations
 
@@ -6,6 +6,8 @@ import fastmcp
 
 from arca_mcp.config import resolve_runtime_config
 from arca_mcp.errors import ArcaError, ArcaErrorCause
+from arca_mcp.padron import client as padron_client
+from arca_mcp.padron.models import PersonaDetails, TaxpayerStatus
 from arca_mcp.wsfe import client as wsfe_client
 from arca_mcp.wsfe.models import CatalogItem
 from arca_mcp.wsaa import WsaaEnvironment, validate_wsaa_login
@@ -132,3 +134,86 @@ def get_currency_types() -> list[CatalogItem] | ArcaError:
         return token_result
     token, sign = token_result
     return wsfe_client.get_currency_types(token, sign, config.environment)
+
+
+def _get_padron_wsaa_token(
+    cert_path,
+    key_path,
+    environment: str,
+) -> tuple[str, str] | ArcaError:
+    """Obtiene token y sign de WSAA para el servicio ws_sr_padron_a4.
+
+    Retorna (token, sign) si el login es exitoso, o ArcaError si falla.
+    """
+    wsaa_env = _ENV_MAP.get(environment, WsaaEnvironment.HOMOLOGACION)
+    result: SetupCheckResult = validate_wsaa_login(
+        cert_path,
+        key_path,
+        service="ws_sr_padron_a4",
+        environment=wsaa_env,
+    )
+    if not result.ok or result.token is None:
+        return ArcaError(
+            cause=ArcaErrorCause.WSAA_AUTH_FAILED,
+            message=result.message or "WSAA login falló sin mensaje de error.",
+        )
+    return result.token.token, result.token.sign
+
+
+@server.tool
+def get_taxpayer_details(cuit: str) -> PersonaDetails | ArcaError:
+    """Retorna los datos completos de un contribuyente del padrón ARCA A4.
+
+    Incluye denominación, estado (ACTIVO/INACTIVO), domicilio fiscal y
+    actividades AFIP registradas para el CUIT consultado.
+
+    Args:
+        cuit: CUIT del contribuyente a consultar (sin guiones).
+    """
+    config = resolve_runtime_config()
+    if isinstance(config, ArcaError):
+        return config
+    token_result = _get_padron_wsaa_token(config.cert_path, config.key_path, config.environment)
+    if isinstance(token_result, ArcaError):
+        return token_result
+    token, sign = token_result
+    return padron_client.get_persona(
+        token=token,
+        sign=sign,
+        emitter_cuit=config.emitter_cuit or cuit,
+        query_cuit=cuit,
+        environment=config.environment,
+    )
+
+
+@server.tool
+def validate_taxpayer_status(cuit: str) -> TaxpayerStatus | ArcaError:
+    """Verifica si un contribuyente está activo en el padrón ARCA A4.
+
+    Retorna un resumen compacto con el estado activo/inactivo del CUIT
+    sin exponer todos los datos del padrón.
+
+    Args:
+        cuit: CUIT del contribuyente a verificar (sin guiones).
+    """
+    config = resolve_runtime_config()
+    if isinstance(config, ArcaError):
+        return config
+    token_result = _get_padron_wsaa_token(config.cert_path, config.key_path, config.environment)
+    if isinstance(token_result, ArcaError):
+        return token_result
+    token, sign = token_result
+    persona_result = padron_client.get_persona(
+        token=token,
+        sign=sign,
+        emitter_cuit=config.emitter_cuit or cuit,
+        query_cuit=cuit,
+        environment=config.environment,
+    )
+    if isinstance(persona_result, ArcaError):
+        return persona_result
+    return TaxpayerStatus(
+        cuit=persona_result.cuit,
+        active=persona_result.status == "ACTIVO",
+        status_description=persona_result.status,
+    )
