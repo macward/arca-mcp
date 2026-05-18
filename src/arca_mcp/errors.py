@@ -23,6 +23,8 @@ class ArcaErrorCause(StrEnum):
     # WSFEv1
     ARCA_SERVICE_ERROR = "ARCA_SERVICE_ERROR"
     INVALID_CATALOG_VALUE = "INVALID_CATALOG_VALUE"
+    # Padrón
+    PADRON_NOT_FOUND = "PADRON_NOT_FOUND"
 
 
 class ArcaError(BaseModel):
