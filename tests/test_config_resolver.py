@@ -266,3 +266,45 @@ class TestUnsupportedEnvironment:
         result = resolve_runtime_config(overrides=ov, _settings=settings)
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.UNSUPPORTED_ENVIRONMENT
+
+    def test_invalid_environment_string_rejected(self):
+        """ConfigOverrides con string inválido para environment → ValidationError de Pydantic."""
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            ConfigOverrides(environment="invalid_env")  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# Caso 3: defaults parciales + overrides que completan
+# ---------------------------------------------------------------------------
+
+class TestPartialDefaultsCompletedByOverrides:
+    def test_partial_defaults_no_cuit_override_provides_cuit(self, tmp_path):
+        """Settings tiene cert+key pero no cuit; override provee cuit → RuntimeConfig OK."""
+        settings, cert_path, key_path = make_settings(tmp_path, cuit=None)
+        ov = ConfigOverrides(emitter_cuit="20111111110")
+        result = resolve_runtime_config(overrides=ov, _settings=settings)
+        assert isinstance(result, RuntimeConfig)
+        assert result.cert_path == cert_path
+        assert result.key_path == key_path
+        assert result.emitter_cuit == "20111111110"
+
+    def test_partial_defaults_no_paths_override_provides_paths(self, tmp_path):
+        """Settings tiene environment y cuit pero no paths; override provee cert+key → RuntimeConfig OK."""
+        override_cert = tmp_path / "ov_cert.crt"
+        override_key = tmp_path / "ov_key.pem"
+        override_cert.write_text("CERT")
+        override_key.write_text("KEY")
+
+        partial_settings = Settings.model_construct(
+            environment=Environment.HOMOLOGACION,
+            cert_path=None,
+            key_path=None,
+            cuit="20222222220",
+        )
+        ov = ConfigOverrides(cert_path=override_cert, key_path=override_key)
+        result = resolve_runtime_config(overrides=ov, _settings=partial_settings)
+        assert isinstance(result, RuntimeConfig)
+        assert result.cert_path == override_cert
+        assert result.key_path == override_key
+        assert result.emitter_cuit == "20222222220"
