@@ -1,0 +1,108 @@
+"""Concurrency tests for TokenCache.get_or_refresh()."""
+
+import asyncio
+import datetime
+from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
+
+from arca_mcp.wsaa.models import WsaaToken
+from arca_mcp.wsaa.token_cache import TokenCache
+
+CUIT_A = "20111111111"
+CUIT_B = "20222222222"
+
+
+def _make_token(minutes_valid: int = 60) -> WsaaToken:
+    now = datetime.datetime.now(datetime.timezone.utc)
+    return WsaaToken(
+        token="tok",
+        sign="sig",
+        generation_time=now.isoformat(),
+        expiration_time=(now + datetime.timedelta(minutes=minutes_valid)).isoformat(),
+    )
+
+
+@pytest.fixture
+def cache(tmp_path: Path) -> TokenCache:
+    return TokenCache(cache_dir=tmp_path / "tokens")
+
+
+@pytest.mark.asyncio
+async def test_concurrent_sessions_trigger_single_login(cache: TokenCache):
+    """10 concurrent coroutines should produce exactly 1 login call."""
+    refresh_mock = MagicMock(return_value=_make_token())
+
+    results = await asyncio.gather(
+        *[cache.get_or_refresh(CUIT_A, refresh_mock) for _ in range(10)]
+    )
+
+    assert refresh_mock.call_count == 1
+    assert all(r.token == "tok" for r in results)
+
+
+@pytest.mark.asyncio
+async def test_independent_locks_per_cuit(cache: TokenCache):
+    """Two different CUITs use independent locks — no mutual blocking."""
+    calls: dict[str, int] = {CUIT_A: 0, CUIT_B: 0}
+
+    def refresh_a() -> WsaaToken:
+        calls[CUIT_A] += 1
+        return _make_token()
+
+    def refresh_b() -> WsaaToken:
+        calls[CUIT_B] += 1
+        return _make_token()
+
+    results = await asyncio.gather(
+        *[cache.get_or_refresh(CUIT_A, refresh_a) for _ in range(5)],
+        *[cache.get_or_refresh(CUIT_B, refresh_b) for _ in range(5)],
+    )
+
+    assert calls[CUIT_A] == 1
+    assert calls[CUIT_B] == 1
+    assert len(results) == 10
+    # Locks for A and B must be distinct objects
+    assert cache._get_lock(CUIT_A) is not cache._get_lock(CUIT_B)
+
+
+@pytest.mark.asyncio
+async def test_cache_hit_bypasses_refresh(cache: TokenCache):
+    """If token is already in cache, refresh_fn is never called."""
+    cache.save(CUIT_A, _make_token())
+    refresh_mock = MagicMock(return_value=_make_token())
+
+    result = await cache.get_or_refresh(CUIT_A, refresh_mock)
+
+    refresh_mock.assert_not_called()
+    assert result.token == "tok"
+
+
+@pytest.mark.asyncio
+async def test_second_waiter_uses_cached_result(cache: TokenCache):
+    """After the first coroutine refreshes, the second must use the cached result."""
+    call_count = 0
+
+    async def slow_refresh_wrapper():
+        nonlocal call_count
+        await asyncio.sleep(0)  # yield to let other coroutines start
+
+        async def do_refresh():
+            return await cache.get_or_refresh(CUIT_A, _do_login)
+
+        return await do_refresh()
+
+    def _do_login() -> WsaaToken:
+        nonlocal call_count
+        call_count += 1
+        return _make_token()
+
+    results = await asyncio.gather(
+        cache.get_or_refresh(CUIT_A, _do_login),
+        cache.get_or_refresh(CUIT_A, _do_login),
+        cache.get_or_refresh(CUIT_A, _do_login),
+    )
+
+    assert call_count == 1
+    assert all(r.token == "tok" for r in results)

@@ -50,7 +50,7 @@ class TestGetToken:
         assert result is None
 
     def test_expiring_soon_returns_none(self):
-        """A token expiring in less than 5 minutes should be treated as a miss."""
+        """A token expiring within the refresh threshold should be treated as a miss."""
         token_store.put_token(CERT, KEY, ENV, SVC, TOKEN, SIGN, _future(3))
         result = token_store.get_token(CERT, KEY, ENV, SVC)
         assert result is None

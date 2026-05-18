@@ -3,8 +3,12 @@
 One JSON file per CUIT at {cache_dir}/{cuit}.json (default: ~/.arca-mcp/tokens/).
 File permissions: 0600. Directory permissions: 0700.
 A token is a miss if expired OR if it expires within the refresh threshold (default 10 min).
+
+Concurrency: get_or_refresh() uses one asyncio.Lock per CUIT (check-lock-check pattern)
+so that only one coroutine performs the login when multiple hit a cache miss simultaneously.
 """
 
+import asyncio
 import datetime
 import json
 from collections.abc import Callable
@@ -26,9 +30,15 @@ class TokenCache:
         self._cache_dir = cache_dir or _DEFAULT_CACHE_DIR
         self._refresh_threshold = datetime.timedelta(minutes=refresh_threshold_minutes)
         self._now = _now or (lambda: datetime.datetime.now(datetime.timezone.utc))
+        self._locks: dict[str, asyncio.Lock] = {}
 
     def _path(self, cuit: str) -> Path:
         return self._cache_dir / f"{cuit}.json"
+
+    def _get_lock(self, cuit: str) -> asyncio.Lock:
+        if cuit not in self._locks:
+            self._locks[cuit] = asyncio.Lock()
+        return self._locks[cuit]
 
     def _parse_expiry(self, raw: str) -> datetime.datetime:
         dt = datetime.datetime.fromisoformat(raw)
@@ -77,3 +87,25 @@ class TokenCache:
     def invalidate(self, cuit: str) -> None:
         """Remove cached token for the given CUIT."""
         self._path(cuit).unlink(missing_ok=True)
+
+    async def get_or_refresh(
+        self,
+        cuit: str,
+        refresh_fn: Callable[[], WsaaToken],
+    ) -> WsaaToken:
+        """Return a valid token, refreshing via refresh_fn if needed.
+
+        Uses check-lock-check pattern: only one coroutine per CUIT performs
+        the login when multiple hit a cache miss simultaneously.
+        """
+        token = self.get(cuit)
+        if token is not None:
+            return token
+
+        async with self._get_lock(cuit):
+            token = self.get(cuit)
+            if token is not None:
+                return token
+            token = refresh_fn()
+            self.save(cuit, token)
+            return token
