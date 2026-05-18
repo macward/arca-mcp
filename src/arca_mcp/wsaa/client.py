@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from enum import StrEnum
 
 import httpx
@@ -27,11 +28,13 @@ def call_login_cms(
     endpoint: str,
     timeout: float = 30.0,
     max_attempts: int = 2,
+    on_retry: Callable[[int], None] | None = None,
 ) -> str:
     """Llama al método loginCms de WSAA y retorna el XML del loginTicketResponse.
 
     Reintenta ante fallos transitorios de red con backoff exponencial (100ms → 500ms).
     `max_attempts=2` significa 1 intento inicial + 1 reintento.
+    `on_retry(attempt)` se llama antes de cada reintento (1-based).
 
     Lanza httpx.HTTPError si la conexión falla tras los reintentos.
     Lanza ValueError si WSAA devuelve un SOAP Fault.
@@ -46,6 +49,7 @@ def call_login_cms(
         response = with_retry(
             lambda: client.post(endpoint, content=body, headers=headers),
             max_attempts=max_attempts,
+            on_retry=on_retry,
         )
 
     # WSAA devuelve SOAP Faults dentro de HTTP 500 con el detalle real

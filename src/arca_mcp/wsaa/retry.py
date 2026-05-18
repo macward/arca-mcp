@@ -25,11 +25,13 @@ def with_retry(
     max_attempts: int = 2,
     delays: tuple[float, ...] = _DEFAULT_DELAYS,
     retryable_exceptions: tuple[type[BaseException], ...] = RETRYABLE_EXCEPTIONS,
+    on_retry: Callable[[int], None] | None = None,
 ) -> T:
     """Call fn up to max_attempts times, sleeping delays[i] between attempts.
 
     Raises the last exception if all attempts fail.
     Non-retryable exceptions propagate immediately without retry.
+    on_retry(attempt_number) is called before each retry (1-based).
     """
     last_exc: BaseException | None = None
     for attempt in range(max_attempts):
@@ -37,7 +39,10 @@ def with_retry(
             return fn()
         except retryable_exceptions as exc:
             last_exc = exc
-            if attempt < max_attempts - 1 and attempt < len(delays):
-                time.sleep(delays[attempt])
+            if attempt < max_attempts - 1:
+                if on_retry is not None:
+                    on_retry(attempt + 1)
+                if attempt < len(delays):
+                    time.sleep(delays[attempt])
     assert last_exc is not None
     raise last_exc
