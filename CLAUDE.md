@@ -66,7 +66,7 @@ El ambiente debe ser siempre explícito en configuración; nunca inferido.
 | Versión | Fase | Estado | Entrega principal |
 |---|---|---|---|
 | v0.1 | Setup Doctor | ✅ Released | Diagnóstico técnico de certificados + WSAA |
-| v0.2 | Lookup Layer | 🚧 En diseño | Consultas deterministas (padrón, catálogos, validaciones) |
+| v0.2 | Lookup Layer | ✅ Released | Consultas deterministas (padrón, catálogos, validaciones) |
 | v0.3 | WSAA Infra Robusta | ⏳ | Caché de token, retry, observabilidad |
 | v0.4 | Draft-Based Invoicing | ⏳ | Emisión segura con `draft → validate → confirm` |
 | v0.5 | Event Layer | ⏳ | Comprobantes entrantes, webhooks |

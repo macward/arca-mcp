@@ -1,9 +1,8 @@
-from pathlib import Path
-
 import httpx
 import pytest
 
 from arca_mcp.errors import ArcaErrorCause
+from arca_mcp.wsaa import token_store
 from arca_mcp.wsaa.login import validate_wsaa_login
 
 SUCCESS_RESPONSE = """<?xml version="1.0"?>
@@ -11,13 +10,20 @@ SUCCESS_RESPONSE = """<?xml version="1.0"?>
   <header>
     <uniqueId>1</uniqueId>
     <generationTime>2026-05-16T10:00:00-03:00</generationTime>
-    <expirationTime>2026-05-16T22:00:00-03:00</expirationTime>
+    <expirationTime>2099-05-16T22:00:00-03:00</expirationTime>
   </header>
   <credentials>
     <token>TOKEN123</token>
     <sign>SIGN456</sign>
   </credentials>
 </loginTicketResponse>"""
+
+
+@pytest.fixture(autouse=True)
+def clean_token_store():
+    token_store.clear_store()
+    yield
+    token_store.clear_store()
 
 
 def test_login_success(cert_key_pair, mocker):
@@ -29,6 +35,23 @@ def test_login_success(cert_key_pair, mocker):
     assert result.token is not None
     assert result.token.token == "TOKEN123"
     assert result.token.sign == "SIGN456"
+
+
+def test_login_uses_cached_token(cert_key_pair, mocker):
+    cert_path, key_path = cert_key_pair
+    call_login = mocker.patch(
+        "arca_mcp.wsaa.login.call_login_cms",
+        return_value=SUCCESS_RESPONSE,
+    )
+
+    first = validate_wsaa_login(cert_path, key_path, service="wsfe")
+    second = validate_wsaa_login(cert_path, key_path, service="wsfe")
+
+    assert first.ok is True
+    assert second.ok is True
+    assert second.token is not None
+    assert second.token.token == "TOKEN123"
+    assert call_login.call_count == 1
 
 
 def test_login_invalid_cert(tmp_path, cert_key_pair):

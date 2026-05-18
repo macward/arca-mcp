@@ -2,11 +2,15 @@ from pathlib import Path
 
 import httpx
 
+import arca_mcp.wsaa.token_store as token_store
 from arca_mcp.certificates.errors import CertificateLoadError, PrivateKeyLoadError
 from arca_mcp.errors import ArcaErrorCause
-from arca_mcp.wsaa.client import WsaaEnvironment, call_login_cms, parse_login_ticket_response
+from arca_mcp.wsaa.client import (
+    WsaaEnvironment,
+    call_login_cms,
+    parse_login_ticket_response,
+)
 from arca_mcp.wsaa.models import SetupCheckResult, WsaaToken
-from arca_mcp.wsaa.services import ArcaService
 from arca_mcp.wsaa.signing import sign_tra
 from arca_mcp.wsaa.tra import build_tra
 
@@ -26,6 +30,15 @@ def validate_wsaa_login(
 
     Si algún paso falla, retorna SetupCheckResult.ok=False con la causa.
     """
+    cached = token_store.get_token(str(cert_path), str(key_path), str(environment), str(service))
+    if cached is not None:
+        token, sign = cached
+        return SetupCheckResult(
+            ok=True,
+            message=f"Token WSAA cacheado para servicio {service!r}.",
+            token=WsaaToken(token=token, sign=sign, generation_time="cached", expiration_time="cached"),
+        )
+
     try:
         tra = build_tra(service)
     except Exception as e:
@@ -93,6 +106,8 @@ def validate_wsaa_login(
             message=f"Error parseando respuesta WSAA: {e}",
         )
 
+    token_store.put_token(str(cert_path), str(key_path), str(environment), str(service), token, sign, exp)
+
     return SetupCheckResult(
         ok=True,
         token=WsaaToken(token=token, sign=sign, generation_time=gen, expiration_time=exp),
@@ -122,4 +137,3 @@ def validate_service_authorization(
         )
 
     return validate_wsaa_login(cert_path, key_path, service=service, environment=environment)
-

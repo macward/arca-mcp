@@ -23,16 +23,16 @@ from pathlib import Path
 import pytest
 
 from arca_mcp.errors import ArcaError
+from arca_mcp.padron import client as padron_client
 from arca_mcp.wsaa import WsaaEnvironment, validate_wsaa_login
 from arca_mcp.wsfe import client as wsfe_client
-from arca_mcp.padron import client as padron_client
-
 
 CERT_PATH = os.environ.get("ARCA_TEST_CERT_PATH")
 KEY_PATH = os.environ.get("ARCA_TEST_KEY_PATH")
 TEST_CUIT = os.environ.get("ARCA_TEST_CUIT")
 
 _has_credentials = bool(CERT_PATH and KEY_PATH)
+_has_cuit = bool(TEST_CUIT)
 
 pytestmark = [
     pytest.mark.e2e,
@@ -102,8 +102,10 @@ class TestGetVoucherTypesE2E:
 
     def test_returns_non_empty_list(self, wsfe_auth):
         """WSFEv1 debe retornar al menos un tipo de comprobante."""
+        if not _has_cuit:
+            pytest.skip("ARCA_TEST_CUIT no seteado")
         token, sign = wsfe_auth
-        result = wsfe_client.get_voucher_types(token, sign, "homologacion")
+        result = wsfe_client.get_voucher_types(token, sign, "homologacion", TEST_CUIT)
         assert not isinstance(result, ArcaError), (
             f"get_voucher_types retornó ArcaError: {result}"
         )
@@ -111,8 +113,10 @@ class TestGetVoucherTypesE2E:
 
     def test_factura_a_present(self, wsfe_auth):
         """Factura A (id='1') debe estar en el catálogo."""
+        if not _has_cuit:
+            pytest.skip("ARCA_TEST_CUIT no seteado")
         token, sign = wsfe_auth
-        result = wsfe_client.get_voucher_types(token, sign, "homologacion")
+        result = wsfe_client.get_voucher_types(token, sign, "homologacion", TEST_CUIT)
         assert not isinstance(result, ArcaError), (
             f"get_voucher_types retornó ArcaError: {result}"
         )
@@ -121,8 +125,10 @@ class TestGetVoucherTypesE2E:
 
     def test_factura_b_present(self, wsfe_auth):
         """Factura B (id='6') debe estar en el catálogo."""
+        if not _has_cuit:
+            pytest.skip("ARCA_TEST_CUIT no seteado")
         token, sign = wsfe_auth
-        result = wsfe_client.get_voucher_types(token, sign, "homologacion")
+        result = wsfe_client.get_voucher_types(token, sign, "homologacion", TEST_CUIT)
         assert not isinstance(result, ArcaError), (
             f"get_voucher_types retornó ArcaError: {result}"
         )
@@ -131,8 +137,10 @@ class TestGetVoucherTypesE2E:
 
     def test_each_item_has_id_and_description(self, wsfe_auth):
         """Cada tipo de comprobante debe tener id y descripción no vacíos."""
+        if not _has_cuit:
+            pytest.skip("ARCA_TEST_CUIT no seteado")
         token, sign = wsfe_auth
-        result = wsfe_client.get_voucher_types(token, sign, "homologacion")
+        result = wsfe_client.get_voucher_types(token, sign, "homologacion", TEST_CUIT)
         assert not isinstance(result, ArcaError), (
             f"get_voucher_types retornó ArcaError: {result}"
         )

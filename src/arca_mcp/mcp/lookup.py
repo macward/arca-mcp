@@ -9,10 +9,10 @@ from arca_mcp.errors import ArcaError, ArcaErrorCause
 from arca_mcp.padron import client as padron_client
 from arca_mcp.padron.models import PersonaDetails, TaxpayerStatus
 from arca_mcp.validation import catalogs
-from arca_mcp.wsfe import client as wsfe_client
-from arca_mcp.wsfe.models import CatalogItem
 from arca_mcp.wsaa import WsaaEnvironment, validate_wsaa_login
 from arca_mcp.wsaa.models import SetupCheckResult
+from arca_mcp.wsfe import client as wsfe_client
+from arca_mcp.wsfe.models import CatalogItem
 
 server = fastmcp.FastMCP("lookup")
 
@@ -47,6 +47,25 @@ def _get_wsaa_token(
     return result.token.token, result.token.sign
 
 
+def _require_emitter_cuit(emitter_cuit: str | None) -> str | ArcaError:
+    """Retorna CUIT emisor configurado o error estructurado."""
+    if emitter_cuit is None or not emitter_cuit.strip():
+        return ArcaError(
+            cause=ArcaErrorCause.MISSING_CONFIG,
+            message=(
+                "ARCA_CUIT no está configurado. "
+                "Las consultas autenticadas a ARCA requieren cuitRepresentada/Cuit."
+            ),
+        )
+    cuit = emitter_cuit.strip()
+    if not cuit.isdigit():
+        return ArcaError(
+            cause=ArcaErrorCause.MISSING_CONFIG,
+            message=f"ARCA_CUIT debe contener solo dígitos: {emitter_cuit!r}",
+        )
+    return cuit
+
+
 @server.tool
 def get_voucher_types() -> list[CatalogItem] | ArcaError:
     """Retorna los tipos de comprobante disponibles en WSFEv1.
@@ -61,8 +80,11 @@ def get_voucher_types() -> list[CatalogItem] | ArcaError:
     token_result = _get_wsaa_token(config.cert_path, config.key_path, config.environment)
     if isinstance(token_result, ArcaError):
         return token_result
+    emitter_cuit = _require_emitter_cuit(config.emitter_cuit)
+    if isinstance(emitter_cuit, ArcaError):
+        return emitter_cuit
     token, sign = token_result
-    return wsfe_client.get_voucher_types(token, sign, config.environment)
+    return wsfe_client.get_voucher_types(token, sign, config.environment, emitter_cuit)
 
 
 @server.tool
@@ -79,8 +101,11 @@ def get_document_types() -> list[CatalogItem] | ArcaError:
     token_result = _get_wsaa_token(config.cert_path, config.key_path, config.environment)
     if isinstance(token_result, ArcaError):
         return token_result
+    emitter_cuit = _require_emitter_cuit(config.emitter_cuit)
+    if isinstance(emitter_cuit, ArcaError):
+        return emitter_cuit
     token, sign = token_result
-    return wsfe_client.get_document_types(token, sign, config.environment)
+    return wsfe_client.get_document_types(token, sign, config.environment, emitter_cuit)
 
 
 @server.tool
@@ -97,8 +122,11 @@ def get_tax_types() -> list[CatalogItem] | ArcaError:
     token_result = _get_wsaa_token(config.cert_path, config.key_path, config.environment)
     if isinstance(token_result, ArcaError):
         return token_result
+    emitter_cuit = _require_emitter_cuit(config.emitter_cuit)
+    if isinstance(emitter_cuit, ArcaError):
+        return emitter_cuit
     token, sign = token_result
-    return wsfe_client.get_tax_types(token, sign, config.environment)
+    return wsfe_client.get_tax_types(token, sign, config.environment, emitter_cuit)
 
 
 @server.tool
@@ -115,8 +143,11 @@ def get_aliquot_types() -> list[CatalogItem] | ArcaError:
     token_result = _get_wsaa_token(config.cert_path, config.key_path, config.environment)
     if isinstance(token_result, ArcaError):
         return token_result
+    emitter_cuit = _require_emitter_cuit(config.emitter_cuit)
+    if isinstance(emitter_cuit, ArcaError):
+        return emitter_cuit
     token, sign = token_result
-    return wsfe_client.get_aliquot_types(token, sign, config.environment)
+    return wsfe_client.get_aliquot_types(token, sign, config.environment, emitter_cuit)
 
 
 @server.tool
@@ -133,8 +164,11 @@ def get_currency_types() -> list[CatalogItem] | ArcaError:
     token_result = _get_wsaa_token(config.cert_path, config.key_path, config.environment)
     if isinstance(token_result, ArcaError):
         return token_result
+    emitter_cuit = _require_emitter_cuit(config.emitter_cuit)
+    if isinstance(emitter_cuit, ArcaError):
+        return emitter_cuit
     token, sign = token_result
-    return wsfe_client.get_currency_types(token, sign, config.environment)
+    return wsfe_client.get_currency_types(token, sign, config.environment, emitter_cuit)
 
 
 def _get_padron_wsaa_token(
@@ -177,11 +211,14 @@ def get_taxpayer_details(cuit: str) -> PersonaDetails | ArcaError:
     token_result = _get_padron_wsaa_token(config.cert_path, config.key_path, config.environment)
     if isinstance(token_result, ArcaError):
         return token_result
+    emitter_cuit = _require_emitter_cuit(config.emitter_cuit)
+    if isinstance(emitter_cuit, ArcaError):
+        return emitter_cuit
     token, sign = token_result
     return padron_client.get_persona(
         token=token,
         sign=sign,
-        emitter_cuit=config.emitter_cuit or cuit,
+        emitter_cuit=emitter_cuit,
         query_cuit=cuit,
         environment=config.environment,
     )
@@ -203,11 +240,14 @@ def validate_taxpayer_status(cuit: str) -> TaxpayerStatus | ArcaError:
     token_result = _get_padron_wsaa_token(config.cert_path, config.key_path, config.environment)
     if isinstance(token_result, ArcaError):
         return token_result
+    emitter_cuit = _require_emitter_cuit(config.emitter_cuit)
+    if isinstance(emitter_cuit, ArcaError):
+        return emitter_cuit
     token, sign = token_result
     persona_result = padron_client.get_persona(
         token=token,
         sign=sign,
-        emitter_cuit=config.emitter_cuit or cuit,
+        emitter_cuit=emitter_cuit,
         query_cuit=cuit,
         environment=config.environment,
     )

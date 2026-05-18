@@ -12,17 +12,20 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from arca_mcp.config_settings import Environment, Settings
 from arca_mcp.errors import ArcaError, ArcaErrorCause
 from arca_mcp.mcp import lookup as _lookup_mod
 from arca_mcp.padron.models import FiscalAddress, PersonaDetails, TaxpayerStatus
 from arca_mcp.wsaa.models import SetupCheckResult, WsaaToken
 
-# FastMCP wraps functions in FunctionTool objects; access .fn to call them directly.
-get_taxpayer_details = _lookup_mod.get_taxpayer_details.fn
-validate_taxpayer_status = _lookup_mod.validate_taxpayer_status.fn
+
+def _tool_fn(tool):
+    """FastMCP may return either FunctionTool objects or plain functions."""
+    return getattr(tool, "fn", tool)
+
+
+get_taxpayer_details = _tool_fn(_lookup_mod.get_taxpayer_details)
+validate_taxpayer_status = _tool_fn(_lookup_mod.validate_taxpayer_status)
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +133,7 @@ class TestGetTaxpayerDetailsHappyPath:
         def fake_get_persona(token, sign, emitter_cuit, query_cuit, environment):
             captured["token"] = token
             captured["sign"] = sign
+            captured["emitter_cuit"] = emitter_cuit
             captured["query_cuit"] = query_cuit
             return _persona_activo()
 
@@ -142,6 +146,7 @@ class TestGetTaxpayerDetailsHappyPath:
 
         assert captured["token"] == "tok"
         assert captured["sign"] == "sig"
+        assert captured["emitter_cuit"] == "20123456789"
         assert captured["query_cuit"] == "20123456789"
 
     def test_uses_ws_sr_padron_a4_service(self, tmp_path):

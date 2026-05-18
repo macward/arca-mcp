@@ -26,13 +26,19 @@ class WsfeEnvironment(StrEnum):
     PRODUCCION = "https://servicios1.afip.gov.ar/wsfev1/service.asmx?WSDL"
 
 
-def _build_auth(token: str, sign: str) -> dict:
+def _build_auth(token: str, sign: str, cuit: str | int) -> dict | ArcaError:
     """Construye el dict Auth para las operaciones paramétricas de WSFEv1.
 
-    Las consultas paramétricas (FEParamGet*) no requieren Cuit real.
-    Se pasa Cuit=0 para satisfacer el schema del servicio.
+    WSFE requiere Cuit real aun para consultas paramétricas FEParamGet*.
     """
-    return {"Token": token, "Sign": sign, "Cuit": 0}
+    try:
+        cuit_int = int(cuit)
+    except (TypeError, ValueError):
+        return ArcaError(
+            cause=ArcaErrorCause.MISSING_CONFIG,
+            message=f"CUIT emisor inválido para WSFEv1: {cuit!r}",
+        )
+    return {"Token": token, "Sign": sign, "Cuit": cuit_int}
 
 
 def _wsdl_url(environment: str) -> str:
@@ -52,16 +58,47 @@ def _parse_catalog(items) -> list[CatalogItem]:
     return result
 
 
+def _extract_result_items(result_data) -> list:
+    """Extrae items desde listas directas o wrappers zeep de ResultGet."""
+    if result_data is None:
+        return []
+
+    if isinstance(result_data, (list, tuple)):
+        return list(result_data)
+
+    for attr in (
+        "CbteTipo",
+        "DocTipo",
+        "TributoTipo",
+        "IvaTipo",
+        "Moneda",
+        "OpcionalTipo",
+        "ConceptoTipo",
+        "PtoVenta",
+    ):
+        value = getattr(result_data, attr, None)
+        if value is not None:
+            return list(value) if isinstance(value, (list, tuple)) else [value]
+
+    try:
+        return list(result_data)
+    except TypeError:
+        return []
+
+
 def _call_wsfe(
     wsdl_url: str,
     method: str,
-    auth: dict,
+    auth: dict | ArcaError,
 ) -> Union[list[CatalogItem], ArcaError]:
     """Llama a un método FEParamGet* de WSFEv1 y retorna lista de CatalogItem.
 
     Retorna ArcaError si zeep falla por red, SOAP Fault, o error en la
     respuesta AFIP. Nunca lanza excepciones crudas.
     """
+    if isinstance(auth, ArcaError):
+        return auth
+
     try:
         client = zeep.Client(wsdl=wsdl_url)
         response = getattr(client.service, method)(Auth=auth)
@@ -96,45 +133,39 @@ def _call_wsfe(
     if result_data is None:
         return []
 
-    # ResultGet contiene un atributo con la lista; intentar iterar directamente
-    try:
-        items = list(result_data)
-    except TypeError:
-        items = []
-
-    return _parse_catalog(items)
+    return _parse_catalog(_extract_result_items(result_data))
 
 
 def get_voucher_types(
-    token: str, sign: str, environment: str
+    token: str, sign: str, environment: str, cuit: str | int
 ) -> Union[list[CatalogItem], ArcaError]:
     """Retorna los tipos de comprobante disponibles en WSFEv1."""
-    return _call_wsfe(_wsdl_url(environment), "FEParamGetTiposCbte", _build_auth(token, sign))
+    return _call_wsfe(_wsdl_url(environment), "FEParamGetTiposCbte", _build_auth(token, sign, cuit))
 
 
 def get_document_types(
-    token: str, sign: str, environment: str
+    token: str, sign: str, environment: str, cuit: str | int
 ) -> Union[list[CatalogItem], ArcaError]:
     """Retorna los tipos de documento soportados por WSFEv1."""
-    return _call_wsfe(_wsdl_url(environment), "FEParamGetTiposDoc", _build_auth(token, sign))
+    return _call_wsfe(_wsdl_url(environment), "FEParamGetTiposDoc", _build_auth(token, sign, cuit))
 
 
 def get_tax_types(
-    token: str, sign: str, environment: str
+    token: str, sign: str, environment: str, cuit: str | int
 ) -> Union[list[CatalogItem], ArcaError]:
     """Retorna los tipos de tributo disponibles en WSFEv1."""
-    return _call_wsfe(_wsdl_url(environment), "FEParamGetTiposTributos", _build_auth(token, sign))
+    return _call_wsfe(_wsdl_url(environment), "FEParamGetTiposTributos", _build_auth(token, sign, cuit))
 
 
 def get_aliquot_types(
-    token: str, sign: str, environment: str
+    token: str, sign: str, environment: str, cuit: str | int
 ) -> Union[list[CatalogItem], ArcaError]:
     """Retorna las alícuotas de IVA disponibles en WSFEv1."""
-    return _call_wsfe(_wsdl_url(environment), "FEParamGetTiposIva", _build_auth(token, sign))
+    return _call_wsfe(_wsdl_url(environment), "FEParamGetTiposIva", _build_auth(token, sign, cuit))
 
 
 def get_currency_types(
-    token: str, sign: str, environment: str
+    token: str, sign: str, environment: str, cuit: str | int
 ) -> Union[list[CatalogItem], ArcaError]:
     """Retorna las monedas disponibles en WSFEv1."""
-    return _call_wsfe(_wsdl_url(environment), "FEParamGetTiposMonedas", _build_auth(token, sign))
+    return _call_wsfe(_wsdl_url(environment), "FEParamGetTiposMonedas", _build_auth(token, sign, cuit))

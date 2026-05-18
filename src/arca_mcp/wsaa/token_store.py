@@ -18,6 +18,15 @@ _STORE: dict[
 _VALIDITY_BUFFER = datetime.timedelta(minutes=5)
 
 
+def _to_aware_utc(value: datetime.datetime | str) -> datetime.datetime:
+    """Normalize a datetime or ISO string to an aware UTC datetime."""
+    if isinstance(value, str):
+        value = datetime.datetime.fromisoformat(value)
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=datetime.timezone.utc)
+    return value.astimezone(datetime.timezone.utc)
+
+
 def get_token(
     cert_path: str,
     key_path: str,
@@ -35,6 +44,7 @@ def get_token(
         return None
 
     token, sign, expiration_time = entry
+    expiration_time = _to_aware_utc(expiration_time)
     now = datetime.datetime.now(datetime.timezone.utc)
     if expiration_time > now + _VALIDITY_BUFFER:
         return token, sign
@@ -51,11 +61,11 @@ def put_token(
     service: str,
     token: str,
     sign: str,
-    expiration_time: datetime.datetime,
+    expiration_time: datetime.datetime | str,
 ) -> None:
     """Store a token under the given key."""
     key = (cert_path, key_path, environment, service)
-    _STORE[key] = (token, sign, expiration_time)
+    _STORE[key] = (token, sign, _to_aware_utc(expiration_time))
 
 
 def clear_store() -> None:

@@ -10,9 +10,7 @@ Verifica que cada tool:
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from arca_mcp.config_settings import Environment, Settings
 from arca_mcp.errors import ArcaError, ArcaErrorCause
@@ -20,12 +18,17 @@ from arca_mcp.mcp import lookup as _lookup_mod
 from arca_mcp.wsaa.models import SetupCheckResult, WsaaToken
 from arca_mcp.wsfe.models import CatalogItem
 
-# FastMCP wraps functions in FunctionTool objects; access .fn to call them directly.
-get_voucher_types = _lookup_mod.get_voucher_types.fn
-get_document_types = _lookup_mod.get_document_types.fn
-get_tax_types = _lookup_mod.get_tax_types.fn
-get_aliquot_types = _lookup_mod.get_aliquot_types.fn
-get_currency_types = _lookup_mod.get_currency_types.fn
+
+def _tool_fn(tool):
+    """FastMCP may return either FunctionTool objects or plain functions."""
+    return getattr(tool, "fn", tool)
+
+
+get_voucher_types = _tool_fn(_lookup_mod.get_voucher_types)
+get_document_types = _tool_fn(_lookup_mod.get_document_types)
+get_tax_types = _tool_fn(_lookup_mod.get_tax_types)
+get_aliquot_types = _tool_fn(_lookup_mod.get_aliquot_types)
+get_currency_types = _tool_fn(_lookup_mod.get_currency_types)
 
 
 # ---------------------------------------------------------------------------
@@ -42,7 +45,7 @@ def _stub_settings(tmp_path: Path) -> Settings:
         environment=Environment.HOMOLOGACION,
         cert_path=cert_path,
         key_path=key_path,
-        cuit=None,
+        cuit="20123456789",
     )
 
 
@@ -255,10 +258,11 @@ class TestHappyPath:
         settings = _stub_settings(tmp_path)
         captured = {}
 
-        def fake_get_voucher_types(token, sign, environment):
+        def fake_get_voucher_types(token, sign, environment, cuit):
             captured["token"] = token
             captured["sign"] = sign
             captured["environment"] = environment
+            captured["cuit"] = cuit
             return _catalog_items()
 
         with (
@@ -266,11 +270,12 @@ class TestHappyPath:
             patch("arca_mcp.mcp.lookup.validate_wsaa_login", return_value=_ok_wsaa_result()),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_voucher_types", side_effect=fake_get_voucher_types),
         ):
-            result = get_voucher_types()
+            get_voucher_types()
 
         assert captured["token"] == "tok"
         assert captured["sign"] == "sig"
         assert captured["environment"] == "homologacion"
+        assert captured["cuit"] == "20123456789"
 
     def test_get_voucher_types_returns_empty_list_when_no_items(self, tmp_path):
         """Lista vacía es un resultado válido."""

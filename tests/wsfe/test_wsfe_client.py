@@ -5,7 +5,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-import pytest
 import zeep.exceptions
 
 from arca_mcp.errors import ArcaError, ArcaErrorCause
@@ -19,6 +18,7 @@ from arca_mcp.wsfe.models import CatalogItem
 TOKEN = "fake-token"
 SIGN = "fake-sign"
 ENV = "homologacion"
+CUIT = "20123456789"
 
 
 def _make_item(id_: str, desc: str) -> SimpleNamespace:
@@ -53,7 +53,7 @@ class TestGetVoucherTypes:
         mock_client = _make_zeep_client("FEParamGetTiposCbte", mock_response)
 
         with patch("arca_mcp.wsfe.client.zeep.Client", return_value=mock_client):
-            result = get_voucher_types(TOKEN, SIGN, ENV)
+            result = get_voucher_types(TOKEN, SIGN, ENV, CUIT)
 
         assert isinstance(result, list)
         assert len(result) == 2
@@ -68,12 +68,22 @@ class TestGetVoucherTypes:
         mock_client = _make_zeep_client("FEParamGetTiposCbte", mock_response)
 
         with patch("arca_mcp.wsfe.client.zeep.Client", return_value=mock_client):
-            get_voucher_types(TOKEN, SIGN, ENV)
+            get_voucher_types(TOKEN, SIGN, ENV, CUIT)
 
         call_kwargs = mock_client.service.FEParamGetTiposCbte.call_args
         auth = call_kwargs.kwargs.get("Auth") or call_kwargs.args[0]
         assert auth["Token"] == TOKEN
         assert auth["Sign"] == SIGN
+        assert auth["Cuit"] == int(CUIT)
+
+    def test_invalid_cuit_returns_arca_error(self):
+        """Un CUIT no numérico retorna ArcaError sin llamar a zeep."""
+        with patch("arca_mcp.wsfe.client.zeep.Client") as mock_client:
+            result = get_voucher_types(TOKEN, SIGN, ENV, "no-es-cuit")
+
+        assert isinstance(result, ArcaError)
+        assert result.cause == ArcaErrorCause.MISSING_CONFIG
+        mock_client.assert_not_called()
 
     def test_zeep_fault_returns_arca_error(self):
         """Un zeep.exceptions.Fault retorna ArcaError con ARCA_SERVICE_ERROR."""
@@ -82,7 +92,7 @@ class TestGetVoucherTypes:
         mock_client.service.FEParamGetTiposCbte.side_effect = fault
 
         with patch("arca_mcp.wsfe.client.zeep.Client", return_value=mock_client):
-            result = get_voucher_types(TOKEN, SIGN, ENV)
+            result = get_voucher_types(TOKEN, SIGN, ENV, CUIT)
 
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.ARCA_SERVICE_ERROR
@@ -94,7 +104,7 @@ class TestGetVoucherTypes:
             "arca_mcp.wsfe.client.zeep.Client",
             side_effect=ConnectionError("sin red"),
         ):
-            result = get_voucher_types(TOKEN, SIGN, ENV)
+            result = get_voucher_types(TOKEN, SIGN, ENV, CUIT)
 
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.ARCA_SERVICE_ERROR
@@ -110,7 +120,7 @@ class TestGetVoucherTypes:
             return mock_client
 
         with patch("arca_mcp.wsfe.client.zeep.Client", side_effect=fake_client):
-            get_voucher_types(TOKEN, SIGN, "homologacion")
+            get_voucher_types(TOKEN, SIGN, "homologacion", CUIT)
 
         assert "wswhomo" in captured["wsdl"]
 
@@ -125,7 +135,7 @@ class TestGetVoucherTypes:
             return mock_client
 
         with patch("arca_mcp.wsfe.client.zeep.Client", side_effect=fake_client):
-            get_voucher_types(TOKEN, SIGN, "produccion")
+            get_voucher_types(TOKEN, SIGN, "produccion", CUIT)
 
         assert "servicios1" in captured["wsdl"]
 
@@ -139,7 +149,7 @@ class TestGetVoucherTypes:
         mock_client = _make_zeep_client("FEParamGetTiposCbte", mock_response)
 
         with patch("arca_mcp.wsfe.client.zeep.Client", return_value=mock_client):
-            result = get_voucher_types(TOKEN, SIGN, ENV)
+            result = get_voucher_types(TOKEN, SIGN, ENV, CUIT)
 
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.ARCA_SERVICE_ERROR
@@ -151,9 +161,23 @@ class TestGetVoucherTypes:
         mock_client = _make_zeep_client("FEParamGetTiposCbte", mock_response)
 
         with patch("arca_mcp.wsfe.client.zeep.Client", return_value=mock_client):
-            result = get_voucher_types(TOKEN, SIGN, ENV)
+            result = get_voucher_types(TOKEN, SIGN, ENV, CUIT)
 
         assert result == []
+
+    def test_resultget_wrapper_is_parsed(self):
+        """ResultGet con wrapper zeep CbteTipo también se parsea."""
+        raw_items = [_make_item("1", "Factura A")]
+        mock_response = SimpleNamespace(
+            ResultGet=SimpleNamespace(CbteTipo=raw_items),
+            Errors=None,
+        )
+        mock_client = _make_zeep_client("FEParamGetTiposCbte", mock_response)
+
+        with patch("arca_mcp.wsfe.client.zeep.Client", return_value=mock_client):
+            result = get_voucher_types(TOKEN, SIGN, ENV, CUIT)
+
+        assert result == [CatalogItem(id="1", description="Factura A")]
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +192,7 @@ class TestGetAliquotTypes:
         mock_client = _make_zeep_client("FEParamGetTiposIva", mock_response)
 
         with patch("arca_mcp.wsfe.client.zeep.Client", return_value=mock_client):
-            result = get_aliquot_types(TOKEN, SIGN, ENV)
+            result = get_aliquot_types(TOKEN, SIGN, ENV, CUIT)
 
         assert isinstance(result, list)
         assert len(result) == 2
@@ -184,7 +208,7 @@ class TestGetAliquotTypes:
         mock_client.service.FEParamGetTiposIva.side_effect = fault
 
         with patch("arca_mcp.wsfe.client.zeep.Client", return_value=mock_client):
-            result = get_aliquot_types(TOKEN, SIGN, ENV)
+            result = get_aliquot_types(TOKEN, SIGN, ENV, CUIT)
 
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.ARCA_SERVICE_ERROR
@@ -202,7 +226,7 @@ class TestGetCurrencyTypes:
         mock_client = _make_zeep_client("FEParamGetTiposMonedas", mock_response)
 
         with patch("arca_mcp.wsfe.client.zeep.Client", return_value=mock_client):
-            result = get_currency_types(TOKEN, SIGN, ENV)
+            result = get_currency_types(TOKEN, SIGN, ENV, CUIT)
 
         assert isinstance(result, list)
         assert len(result) == 2
@@ -216,7 +240,7 @@ class TestGetCurrencyTypes:
             "arca_mcp.wsfe.client.zeep.Client",
             side_effect=OSError("timeout"),
         ):
-            result = get_currency_types(TOKEN, SIGN, ENV)
+            result = get_currency_types(TOKEN, SIGN, ENV, CUIT)
 
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.ARCA_SERVICE_ERROR

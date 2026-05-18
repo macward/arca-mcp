@@ -10,20 +10,23 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from arca_mcp.errors import ArcaError, ArcaErrorCause
 from arca_mcp.mcp import certificates as _certs_mod
 from arca_mcp.mcp import setup as _setup_mod
 
-# FastMCP wraps functions in FunctionTool objects; access .fn to call them directly.
-validate_certificate = _certs_mod.validate_certificate.fn
-validate_private_key = _certs_mod.validate_private_key.fn
-validate_cert_key_match = _certs_mod.validate_cert_key_match.fn
-inspect_certificate = _certs_mod.inspect_certificate.fn
-validate_wsaa_login = _setup_mod.validate_wsaa_login.fn
-validate_service_authorization = _setup_mod.validate_service_authorization.fn
-setup_doctor = _setup_mod.setup_doctor.fn
+
+def _tool_fn(tool):
+    """FastMCP may return either FunctionTool objects or plain functions."""
+    return getattr(tool, "fn", tool)
+
+
+validate_certificate = _tool_fn(_certs_mod.validate_certificate)
+validate_private_key = _tool_fn(_certs_mod.validate_private_key)
+validate_cert_key_match = _tool_fn(_certs_mod.validate_cert_key_match)
+inspect_certificate = _tool_fn(_certs_mod.inspect_certificate)
+validate_wsaa_login = _tool_fn(_setup_mod.validate_wsaa_login)
+validate_service_authorization = _tool_fn(_setup_mod.validate_service_authorization)
+setup_doctor = _tool_fn(_setup_mod.setup_doctor)
 
 
 # ---------------------------------------------------------------------------

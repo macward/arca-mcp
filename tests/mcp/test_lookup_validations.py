@@ -12,10 +12,15 @@ import pytest
 
 from arca_mcp.mcp import lookup as _lookup_mod
 
-# FastMCP wraps functions in FunctionTool objects; access .fn to call them directly.
-validate_invoice_type = _lookup_mod.validate_invoice_type.fn
-validate_vat_condition = _lookup_mod.validate_vat_condition.fn
-validate_currency = _lookup_mod.validate_currency.fn
+
+def _tool_fn(tool):
+    """FastMCP may return either FunctionTool objects or plain functions."""
+    return getattr(tool, "fn", tool)
+
+
+validate_invoice_type = _tool_fn(_lookup_mod.validate_invoice_type)
+validate_vat_condition = _tool_fn(_lookup_mod.validate_vat_condition)
+validate_currency = _tool_fn(_lookup_mod.validate_currency)
 
 
 class TestValidateInvoiceType:
