@@ -4,6 +4,7 @@ from pathlib import Path
 
 import fastmcp
 
+from arca_mcp.config import Environment
 from arca_mcp.wsaa import (
     SetupCheckResult,
     SetupDoctorReport,
@@ -16,37 +17,70 @@ from arca_mcp.wsaa import (
 server = fastmcp.FastMCP("setup")
 
 
+_ENV_MAP = {
+    Environment.HOMOLOGACION: WsaaEnvironment.HOMOLOGACION,
+    Environment.PRODUCCION: WsaaEnvironment.PRODUCCION,
+}
+
+
+def _resolve_environment(environment: str) -> WsaaEnvironment:
+    try:
+        env = Environment(environment)
+    except ValueError as exc:
+        valid = ", ".join(member.value for member in Environment)
+        raise ValueError(
+            f"environment inválido: {environment!r}. Valores válidos: {valid}"
+        ) from exc
+    return _ENV_MAP[env]
+
+
 @server.tool
-def validate_wsaa_login(cert_path: str, key_path: str, service: str = "wsfe") -> SetupCheckResult:
-    """Intenta autenticarse con WSAA homologación y verifica que el token sea válido."""
+def validate_wsaa_login(
+    cert_path: str,
+    key_path: str,
+    service: str = "wsfe",
+    environment: str = "homologacion",
+) -> SetupCheckResult:
+    """Intenta autenticarse con WSAA y verifica que el token sea válido.
+
+    `environment`: "homologacion" (default) o "produccion".
+    """
     return _validate_wsaa(
         Path(cert_path),
         Path(key_path),
         service=service,
-        environment=WsaaEnvironment.HOMOLOGACION,
+        environment=_resolve_environment(environment),
     )
 
 
 @server.tool
 def validate_service_authorization(
-    cert_path: str, key_path: str, service: str
+    cert_path: str,
+    key_path: str,
+    service: str,
+    environment: str = "homologacion",
 ) -> SetupCheckResult:
     """Verifica que el certificado tenga acceso autorizado a un servicio ARCA.
 
     Servicios comunes: wsfe (factura electrónica), ws_sr_padron_a4 (padrón),
     wsfex (factura de exportación), wsmtxca (factura con detalle).
+
+    `environment`: "homologacion" (default) o "produccion".
     """
     return _validate_service(
         Path(cert_path),
         Path(key_path),
         service=service,
-        environment=WsaaEnvironment.HOMOLOGACION,
+        environment=_resolve_environment(environment),
     )
 
 
 @server.tool
 def setup_doctor(
-    cert_path: str, key_path: str, service: str = "wsfe"
+    cert_path: str,
+    key_path: str,
+    service: str = "wsfe",
+    environment: str = "homologacion",
 ) -> SetupDoctorReport:
     """Ejecuta el diagnóstico completo del setup técnico ARCA.
 
@@ -56,10 +90,12 @@ def setup_doctor(
 
     Retorna un reporte con la lista de checks y el campo `failed_check` apuntando
     al primer fallo.
+
+    `environment`: "homologacion" (default) o "produccion".
     """
     return run_setup_doctor(
         Path(cert_path),
         Path(key_path),
         service=service,
-        environment=WsaaEnvironment.HOMOLOGACION,
+        environment=_resolve_environment(environment),
     )

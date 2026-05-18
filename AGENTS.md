@@ -1,6 +1,6 @@
 meridian: arca-mcp
 
-# MCP ARCA — CLAUDE.md
+# MCP ARCA — AGENTS.md
 
 ## Stack
 
@@ -63,16 +63,11 @@ El ambiente debe ser siempre explícito en configuración; nunca inferido.
 
 ## Roadmap
 
-| Versión | Fase | Estado | Entrega principal |
-|---|---|---|---|
-| v0.1 | Setup Doctor | ✅ Released | Diagnóstico técnico de certificados + WSAA |
-| v0.2 | Lookup Layer | 🚧 En diseño | Consultas deterministas (padrón, catálogos, validaciones) |
-| v0.3 | WSAA Infra Robusta | ⏳ | Caché de token, retry, observabilidad |
-| v0.4 | Draft-Based Invoicing | ⏳ | Emisión segura con `draft → validate → confirm` |
-| v0.5 | Event Layer | ⏳ | Comprobantes entrantes, webhooks |
-| v1.0 | Producción + Playwright | ⏳ | Producción habilitada + automatización del portal ARCA |
-
-**Fuente de verdad:** `docs/ROADMAP.md` (scope, criterios de aceptación, dependencias por fase).
-**Diseño estratégico:** `~/Developer/3_RESEARCH/Obsidian/1_Projects/ArcaMCP/00 Verticales y Roadmap.md`.
-
-**Wedge estratégico:** "hacer usable ARCA para developers y agentes", no "AI para impuestos". Fuera de scope inicial: WSMTXCA, Factura MiPyME, Exportación, Agro, SIRE.
+| Fase | Descripción |
+|------|-------------|
+| v0 | Setup Doctor — validación de certificados y WSAA |
+| v1 | WSAA funcional en homologación |
+| v2 | Tools MCP básicas (consultas, catálogos) |
+| v3 | Draft → validate → confirm para comprobantes |
+| v4 | Automatización Playwright del portal ARCA |
+| v5 | Producción controlada |

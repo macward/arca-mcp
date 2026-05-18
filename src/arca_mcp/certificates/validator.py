@@ -14,6 +14,12 @@ def validate_certificate(path: Path) -> CertificateValidationResult:
         cert = load_certificate(path)
     except CertificateLoadError as e:
         return CertificateValidationResult(valid=False, cause=ArcaErrorCause.CERT_INVALID, message=str(e))
+    except Exception as e:
+        return CertificateValidationResult(
+            valid=False,
+            cause=ArcaErrorCause.CERT_INVALID,
+            message=f"Error inesperado al cargar certificado ({type(e).__name__}): {e}",
+        )
 
     now = datetime.datetime.now(datetime.UTC)
 
@@ -39,6 +45,12 @@ def validate_private_key(path: Path) -> CertificateValidationResult:
         load_private_key(path)
     except PrivateKeyLoadError as e:
         return CertificateValidationResult(valid=False, cause=ArcaErrorCause.KEY_INVALID, message=str(e))
+    except Exception as e:
+        return CertificateValidationResult(
+            valid=False,
+            cause=ArcaErrorCause.KEY_INVALID,
+            message=f"Error inesperado al cargar private key ({type(e).__name__}): {e}",
+        )
 
     return CertificateValidationResult(valid=True)
 
@@ -48,20 +60,39 @@ def validate_cert_key_match(cert_path: Path, key_path: Path) -> CertificateValid
         cert = load_certificate(cert_path)
     except CertificateLoadError as e:
         return CertificateValidationResult(valid=False, cause=ArcaErrorCause.CERT_INVALID, message=str(e))
+    except Exception as e:
+        return CertificateValidationResult(
+            valid=False,
+            cause=ArcaErrorCause.CERT_INVALID,
+            message=f"Error inesperado al cargar certificado ({type(e).__name__}): {e}",
+        )
 
     try:
         key = load_private_key(key_path)
     except PrivateKeyLoadError as e:
         return CertificateValidationResult(valid=False, cause=ArcaErrorCause.KEY_INVALID, message=str(e))
+    except Exception as e:
+        return CertificateValidationResult(
+            valid=False,
+            cause=ArcaErrorCause.KEY_INVALID,
+            message=f"Error inesperado al cargar private key ({type(e).__name__}): {e}",
+        )
 
-    cert_pub = cert.public_key().public_bytes(
-        encoding=Encoding.PEM,
-        format=PublicFormat.SubjectPublicKeyInfo,
-    )
-    key_pub = key.public_key().public_bytes(
-        encoding=Encoding.PEM,
-        format=PublicFormat.SubjectPublicKeyInfo,
-    )
+    try:
+        cert_pub = cert.public_key().public_bytes(
+            encoding=Encoding.PEM,
+            format=PublicFormat.SubjectPublicKeyInfo,
+        )
+        key_pub = key.public_key().public_bytes(
+            encoding=Encoding.PEM,
+            format=PublicFormat.SubjectPublicKeyInfo,
+        )
+    except Exception as e:
+        return CertificateValidationResult(
+            valid=False,
+            cause=ArcaErrorCause.CERT_KEY_MISMATCH,
+            message=f"No se pudo comparar las claves públicas ({type(e).__name__}): {e}",
+        )
 
     if cert_pub != key_pub:
         return CertificateValidationResult(

@@ -18,8 +18,8 @@ def build_tra(service: str, ttl_seconds: int = 2400) -> bytes:
 
     header = etree.SubElement(root, "header")
     etree.SubElement(header, "uniqueId").text = str(secrets.randbits(31))
-    etree.SubElement(header, "generationTime").text = generation.strftime("%Y-%m-%dT%H:%M:%S-00:00")
-    etree.SubElement(header, "expirationTime").text = expiration.strftime("%Y-%m-%dT%H:%M:%S-00:00")
+    etree.SubElement(header, "generationTime").text = generation.isoformat(timespec="seconds")
+    etree.SubElement(header, "expirationTime").text = expiration.isoformat(timespec="seconds")
 
     etree.SubElement(root, "service").text = service
 

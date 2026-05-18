@@ -1,3 +1,6 @@
+import datetime
+import re
+
 from lxml import etree
 
 from arca_mcp.wsaa.tra import build_tra
@@ -34,6 +37,18 @@ def test_build_tra_generation_before_expiration():
     gen = root.findtext("header/generationTime")
     exp = root.findtext("header/expirationTime")
     assert gen < exp
+
+
+def test_build_tra_timestamps_are_iso8601_utc():
+    tra = build_tra("wsfe")
+    root = etree.fromstring(tra)
+    gen = root.findtext("header/generationTime")
+    exp = root.findtext("header/expirationTime")
+    pattern = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00$")
+    assert pattern.match(gen), gen
+    assert pattern.match(exp), exp
+    datetime.datetime.fromisoformat(gen)
+    datetime.datetime.fromisoformat(exp)
 
 
 def test_build_tra_different_unique_ids():

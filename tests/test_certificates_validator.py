@@ -100,3 +100,25 @@ def test_validate_private_key_not_found():
     result = validate_private_key(Path("/nonexistent/key.pem"))
     assert result.valid is False
     assert result.cause == "KEY_INVALID"
+
+
+def test_validate_private_key_password_protected(tmp_path):
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    path = tmp_path / "encrypted.pem"
+    path.write_bytes(
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.TraditionalOpenSSL,
+            serialization.BestAvailableEncryption(b"secret123"),
+        )
+    )
+    result = validate_private_key(path)
+    assert result.valid is False
+    assert result.cause == "KEY_INVALID"
+    assert result.message  # mensaje legible, no crash
+
+
+def test_validate_private_key_directory_path(tmp_path):
+    result = validate_private_key(tmp_path)
+    assert result.valid is False
+    assert result.cause == "KEY_INVALID"

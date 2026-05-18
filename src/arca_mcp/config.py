@@ -24,6 +24,3 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment == Environment.PRODUCCION
-
-
-settings = Settings()

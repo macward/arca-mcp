@@ -20,19 +20,41 @@ SOAP_ENVELOPE_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 </soapenv:Envelope>"""
 
 
-def call_login_cms(cms_b64: str, endpoint: str, timeout: float = 30.0) -> str:
+_TRANSIENT_ERRORS = (httpx.ConnectError, httpx.TimeoutException)
+
+
+def call_login_cms(
+    cms_b64: str,
+    endpoint: str,
+    timeout: float = 30.0,
+    retries: int = 1,
+) -> str:
     """Llama al método loginCms de WSAA y retorna el XML del loginTicketResponse.
 
-    Lanza httpx.HTTPError si la conexión falla.
+    `retries` es el número de reintentos adicionales ante fallos transitorios
+    de red (`ConnectError`, `TimeoutException`). Total de intentos = retries + 1.
+
+    Lanza httpx.HTTPError si la conexión falla tras los reintentos.
     Lanza ValueError si WSAA devuelve un SOAP Fault.
     """
-    body = SOAP_ENVELOPE_TEMPLATE.format(cms=cms_b64)
+    body = SOAP_ENVELOPE_TEMPLATE.format(cms=cms_b64).encode("utf-8")
     headers = {
         "Content-Type": "text/xml; charset=utf-8",
         "SOAPAction": "",
     }
 
-    response = httpx.post(endpoint, content=body.encode("utf-8"), headers=headers, timeout=timeout)
+    attempts = max(retries, 0) + 1
+    last_exc: Exception | None = None
+    with httpx.Client(verify=True, timeout=timeout) as client:
+        for _ in range(attempts):
+            try:
+                response = client.post(endpoint, content=body, headers=headers)
+                break
+            except _TRANSIENT_ERRORS as exc:
+                last_exc = exc
+        else:
+            assert last_exc is not None
+            raise last_exc
     response.raise_for_status()
 
     root = etree.fromstring(response.content)
