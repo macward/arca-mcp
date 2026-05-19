@@ -154,7 +154,7 @@ class TestGetTaxpayerDetailsHappyPath:
         settings = _stub_settings(tmp_path)
         captured = {}
 
-        def fake_validate_wsaa_login(cert_path, key_path, service, environment):
+        def fake_validate_wsaa_login(cert_path, key_path, service, environment, cuit=None):
             captured["service"] = service
             return _ok_wsaa_result()
 

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-19
+
+### Added
+- **Token cache filesystem WSAA** (`wsaa/token_cache.py`) — persiste tokens entre sesiones en `~/.arca-mcp/tokens/{cuit}.json` con permisos `0600`. Refresh automático cuando faltan <10 min de TTL.
+- **Logs estructurados por call WSAA** (`wsaa/wsaa_logger.py`) — emite JSON con `ts`, `cuit`, `service`, `latency_ms`, `result` (`ok` | `cached` | `retried` | `failed`) en cada operación WSAA.
+- **Multi-CUIT en caché** — tokens segregados por CUIT; invalidar uno no afecta a los demás.
+- `docs/operations-v0.3-wsaa-cache.md` — runbook de operaciones: limpiar caché, rotar certificados sin downtime.
+
+### Changed
+- **Filesystem cache activado en todas las tools MCP** (`mcp/lookup.py`) — `emitter_cuit` se pasa a `validate_wsaa_login`, activando la persistencia entre reinicios del servidor. Antes el `TokenCache` existía pero nunca se instanciaba desde las tools.
+- Validación de `emitter_cuit` se ejecuta antes del login WSAA — evita un round-trip de red cuando el CUIT no está configurado.
+
+### Tests
+- Test de concurrencia: 10 sesiones simultáneas comparten el mismo token sin race condition (`test_10_concurrent_sessions_single_login`).
+- Test de expiración: token expirado en disco fuerza re-login (`TestExpirationEndToEnd`).
+- Test multi-CUIT: dos CUITs almacenados independientemente, invalidar uno no afecta al otro.
+- 344 tests pasando, 3 skipped (E2E sin credenciales).
+
 ## [0.2.0] - 2026-05-18
 
 ### Added
