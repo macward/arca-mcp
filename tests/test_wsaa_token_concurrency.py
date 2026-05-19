@@ -1,4 +1,4 @@
-"""Concurrency tests for TokenCache.get_or_refresh()."""
+"""Concurrency tests for TokenCache.get_or_refresh() and validate_wsaa_login()."""
 
 import asyncio
 import datetime
@@ -7,6 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from arca_mcp.wsaa import token_store
+from arca_mcp.wsaa.login import validate_wsaa_login
 from arca_mcp.wsaa.models import WsaaToken
 from arca_mcp.wsaa.token_cache import TokenCache
 
@@ -106,3 +108,52 @@ async def test_second_waiter_uses_cached_result(cache: TokenCache):
 
     assert call_count == 1
     assert all(r.token == "tok" for r in results)
+
+
+# ---------------------------------------------------------------------------
+# Production path: validate_wsaa_login() with concurrent callers
+# ---------------------------------------------------------------------------
+
+SUCCESS_RESPONSE = """<?xml version="1.0"?>
+<loginTicketResponse>
+  <header>
+    <uniqueId>1</uniqueId>
+    <generationTime>2026-05-16T10:00:00-03:00</generationTime>
+    <expirationTime>2099-05-16T22:00:00-03:00</expirationTime>
+  </header>
+  <credentials>
+    <token>TOKEN123</token>
+    <sign>SIGN456</sign>
+  </credentials>
+</loginTicketResponse>"""
+
+
+@pytest.fixture(autouse=True)
+def clean_token_store():
+    token_store.clear_store()
+    yield
+    token_store.clear_store()
+
+
+@pytest.mark.asyncio
+async def test_validate_wsaa_login_concurrent_single_network_call(
+    tmp_path: Path, mocker, cert_key_pair
+):
+    """10 concurrent calls to validate_wsaa_login() with the same CUIT produce exactly 1 WSAA request."""
+    cert_path, key_path = cert_key_pair
+    call_login = mocker.patch(
+        "arca_mcp.wsaa.login.call_login_cms",
+        return_value=SUCCESS_RESPONSE,
+    )
+    fs_cache = TokenCache(cache_dir=tmp_path / "tokens")
+
+    results = await asyncio.gather(
+        *[
+            validate_wsaa_login(cert_path, key_path, cuit=CUIT_A, cache=fs_cache)
+            for _ in range(10)
+        ]
+    )
+
+    assert call_login.call_count == 1
+    assert all(r.ok for r in results)
+    assert all(r.token is not None and r.token.token == "TOKEN123" for r in results)

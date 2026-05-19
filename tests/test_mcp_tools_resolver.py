@@ -10,6 +10,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from arca_mcp.errors import ArcaError, ArcaErrorCause
 from arca_mcp.mcp import certificates as _certs_mod
 from arca_mcp.mcp import setup as _setup_mod
@@ -91,21 +93,24 @@ class TestMissingConfigPropagation:
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.MISSING_CONFIG
 
-    def test_validate_wsaa_login_missing_config(self):
+    @pytest.mark.asyncio
+    async def test_validate_wsaa_login_missing_config(self):
         with patch("arca_mcp.config.get_server_settings", return_value=self._bare_settings()):
-            result = validate_wsaa_login()
+            result = await validate_wsaa_login()
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.MISSING_CONFIG
 
-    def test_validate_service_authorization_missing_config(self):
+    @pytest.mark.asyncio
+    async def test_validate_service_authorization_missing_config(self):
         with patch("arca_mcp.config.get_server_settings", return_value=self._bare_settings()):
-            result = validate_service_authorization()
+            result = await validate_service_authorization()
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.MISSING_CONFIG
 
-    def test_setup_doctor_missing_config(self):
+    @pytest.mark.asyncio
+    async def test_setup_doctor_missing_config(self):
         with patch("arca_mcp.config.get_server_settings", return_value=self._bare_settings()):
-            result = setup_doctor()
+            result = await setup_doctor()
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.MISSING_CONFIG
 
@@ -122,10 +127,11 @@ class TestInvalidConfigOverridePropagation:
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.INVALID_CONFIG_OVERRIDE
 
-    def test_setup_doctor_only_key_path(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_setup_doctor_only_key_path(self, tmp_path):
         key_path = tmp_path / "key.pem"
         key_path.write_text("KEY")
-        result = setup_doctor(key_path=str(key_path))
+        result = await setup_doctor(key_path=str(key_path))
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.INVALID_CONFIG_OVERRIDE
 
@@ -135,12 +141,13 @@ class TestInvalidConfigOverridePropagation:
 # ---------------------------------------------------------------------------
 
 class TestUnsupportedEnvironmentPropagation:
-    def test_validate_wsaa_login_produccion(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_validate_wsaa_login_produccion(self, tmp_path):
         cert_path = tmp_path / "cert.crt"
         key_path = tmp_path / "key.pem"
         cert_path.write_text("CERT")
         key_path.write_text("KEY")
-        result = validate_wsaa_login(
+        result = await validate_wsaa_login(
             cert_path=str(cert_path),
             key_path=str(key_path),
             environment="produccion",
@@ -148,12 +155,13 @@ class TestUnsupportedEnvironmentPropagation:
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.UNSUPPORTED_ENVIRONMENT
 
-    def test_setup_doctor_produccion(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_setup_doctor_produccion(self, tmp_path):
         cert_path = tmp_path / "cert.crt"
         key_path = tmp_path / "key.pem"
         cert_path.write_text("CERT")
         key_path.write_text("KEY")
-        result = setup_doctor(
+        result = await setup_doctor(
             cert_path=str(cert_path),
             key_path=str(key_path),
             environment="produccion",
@@ -171,7 +179,6 @@ class TestOverridesResolveToCorrectPaths:
         """Con override, validate_certificate llama a la capa interna con el path correcto."""
         cert_path, key_path = cert_key_pair
         result = validate_certificate(cert_path=str(cert_path), key_path=str(key_path))
-        # La capa interna retorna CertificateValidationResult, no ArcaError
         assert not isinstance(result, ArcaError)
         assert result.valid is True
 
@@ -199,6 +206,5 @@ class TestOverridesResolveToCorrectPaths:
         settings = _stub_settings(tmp_path)
         with patch("arca_mcp.config.get_server_settings", return_value=settings):
             result = validate_certificate()
-        # cert en disco contiene texto plano, no un cert válido → invalid
         assert not isinstance(result, ArcaError)
         assert result.valid is False  # "CERT" no es un PEM válido

@@ -12,11 +12,14 @@ so that only one coroutine performs the login when multiple hit a cache miss sim
 import asyncio
 import datetime
 import json
+import logging
 import os
 from collections.abc import Callable
 from pathlib import Path
 
 from arca_mcp.wsaa.models import WsaaToken
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_CACHE_DIR = Path.home() / ".arca-mcp" / "tokens"
 _ENV_VAR = "ARCA_TOKEN_CACHE_DIR"
@@ -100,7 +103,8 @@ class TokenCache:
             if self.is_near_expiry(token):
                 return None
             return token
-        except (KeyError, ValueError, OSError):
+        except (KeyError, ValueError, OSError) as e:
+            logger.warning("TokenCache: token ignorado para cuit=%s: %s", cuit, e)
             return None
 
     def save(self, cuit: str, token: WsaaToken) -> None:

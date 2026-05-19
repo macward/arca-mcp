@@ -23,7 +23,7 @@ _ENV_MAP = {
 }
 
 
-def _get_wsaa_token(
+async def _get_wsaa_token(
     cert_path,
     key_path,
     environment: str,
@@ -34,7 +34,7 @@ def _get_wsaa_token(
     Retorna (token, sign) si el login es exitoso, o ArcaError si falla.
     """
     wsaa_env = _ENV_MAP.get(environment, WsaaEnvironment.HOMOLOGACION)
-    result: SetupCheckResult = validate_wsaa_login(
+    result: SetupCheckResult = await validate_wsaa_login(
         cert_path,
         key_path,
         service="wsfe",
@@ -69,7 +69,7 @@ def _require_emitter_cuit(emitter_cuit: str | None) -> str | ArcaError:
 
 
 @server.tool
-def get_voucher_types() -> list[CatalogItem] | ArcaError:
+async def get_voucher_types() -> list[CatalogItem] | ArcaError:
     """Retorna los tipos de comprobante disponibles en WSFEv1.
 
     Ejemplos: Factura A (1), Factura B (6), Nota de Crédito A (3), etc.
@@ -82,7 +82,7 @@ def get_voucher_types() -> list[CatalogItem] | ArcaError:
     emitter_cuit = _require_emitter_cuit(config.emitter_cuit)
     if isinstance(emitter_cuit, ArcaError):
         return emitter_cuit
-    token_result = _get_wsaa_token(config.cert_path, config.key_path, config.environment, cuit=emitter_cuit)
+    token_result = await _get_wsaa_token(config.cert_path, config.key_path, config.environment, cuit=emitter_cuit)
     if isinstance(token_result, ArcaError):
         return token_result
     token, sign = token_result
@@ -90,7 +90,7 @@ def get_voucher_types() -> list[CatalogItem] | ArcaError:
 
 
 @server.tool
-def get_document_types() -> list[CatalogItem] | ArcaError:
+async def get_document_types() -> list[CatalogItem] | ArcaError:
     """Retorna los tipos de documento soportados por WSFEv1.
 
     Ejemplos: DNI (96), CUIT (80), Pasaporte (94), etc.
@@ -103,7 +103,7 @@ def get_document_types() -> list[CatalogItem] | ArcaError:
     emitter_cuit = _require_emitter_cuit(config.emitter_cuit)
     if isinstance(emitter_cuit, ArcaError):
         return emitter_cuit
-    token_result = _get_wsaa_token(config.cert_path, config.key_path, config.environment, cuit=emitter_cuit)
+    token_result = await _get_wsaa_token(config.cert_path, config.key_path, config.environment, cuit=emitter_cuit)
     if isinstance(token_result, ArcaError):
         return token_result
     token, sign = token_result
@@ -111,7 +111,7 @@ def get_document_types() -> list[CatalogItem] | ArcaError:
 
 
 @server.tool
-def get_tax_types() -> list[CatalogItem] | ArcaError:
+async def get_tax_types() -> list[CatalogItem] | ArcaError:
     """Retorna los tipos de tributo disponibles en WSFEv1.
 
     Ejemplos: IVA (1), Impuestos Nacionales (2), Impuestos Provinciales (3), etc.
@@ -124,7 +124,7 @@ def get_tax_types() -> list[CatalogItem] | ArcaError:
     emitter_cuit = _require_emitter_cuit(config.emitter_cuit)
     if isinstance(emitter_cuit, ArcaError):
         return emitter_cuit
-    token_result = _get_wsaa_token(config.cert_path, config.key_path, config.environment, cuit=emitter_cuit)
+    token_result = await _get_wsaa_token(config.cert_path, config.key_path, config.environment, cuit=emitter_cuit)
     if isinstance(token_result, ArcaError):
         return token_result
     token, sign = token_result
@@ -132,7 +132,7 @@ def get_tax_types() -> list[CatalogItem] | ArcaError:
 
 
 @server.tool
-def get_aliquot_types() -> list[CatalogItem] | ArcaError:
+async def get_aliquot_types() -> list[CatalogItem] | ArcaError:
     """Retorna las alícuotas de IVA disponibles en WSFEv1.
 
     Ejemplos: 21% (5), 10.5% (4), 27% (6), Exento (3), etc.
@@ -145,7 +145,7 @@ def get_aliquot_types() -> list[CatalogItem] | ArcaError:
     emitter_cuit = _require_emitter_cuit(config.emitter_cuit)
     if isinstance(emitter_cuit, ArcaError):
         return emitter_cuit
-    token_result = _get_wsaa_token(config.cert_path, config.key_path, config.environment, cuit=emitter_cuit)
+    token_result = await _get_wsaa_token(config.cert_path, config.key_path, config.environment, cuit=emitter_cuit)
     if isinstance(token_result, ArcaError):
         return token_result
     token, sign = token_result
@@ -153,7 +153,7 @@ def get_aliquot_types() -> list[CatalogItem] | ArcaError:
 
 
 @server.tool
-def get_currency_types() -> list[CatalogItem] | ArcaError:
+async def get_currency_types() -> list[CatalogItem] | ArcaError:
     """Retorna las monedas disponibles en WSFEv1.
 
     Ejemplos: Pesos Argentinos (PES), Dólar EEUU (DOL), Euro (060), etc.
@@ -166,14 +166,14 @@ def get_currency_types() -> list[CatalogItem] | ArcaError:
     emitter_cuit = _require_emitter_cuit(config.emitter_cuit)
     if isinstance(emitter_cuit, ArcaError):
         return emitter_cuit
-    token_result = _get_wsaa_token(config.cert_path, config.key_path, config.environment, cuit=emitter_cuit)
+    token_result = await _get_wsaa_token(config.cert_path, config.key_path, config.environment, cuit=emitter_cuit)
     if isinstance(token_result, ArcaError):
         return token_result
     token, sign = token_result
     return wsfe_client.get_currency_types(token, sign, config.environment, emitter_cuit)
 
 
-def _get_padron_wsaa_token(
+async def _get_padron_wsaa_token(
     cert_path,
     key_path,
     environment: str,
@@ -184,7 +184,7 @@ def _get_padron_wsaa_token(
     Retorna (token, sign) si el login es exitoso, o ArcaError si falla.
     """
     wsaa_env = _ENV_MAP.get(environment, WsaaEnvironment.HOMOLOGACION)
-    result: SetupCheckResult = validate_wsaa_login(
+    result: SetupCheckResult = await validate_wsaa_login(
         cert_path,
         key_path,
         service="ws_sr_padron_a4",
@@ -200,7 +200,7 @@ def _get_padron_wsaa_token(
 
 
 @server.tool
-def get_taxpayer_details(cuit: str) -> PersonaDetails | ArcaError:
+async def get_taxpayer_details(cuit: str) -> PersonaDetails | ArcaError:
     """Retorna los datos completos de un contribuyente del padrón ARCA A4.
 
     Incluye denominación, estado (ACTIVO/INACTIVO), domicilio fiscal y
@@ -215,7 +215,7 @@ def get_taxpayer_details(cuit: str) -> PersonaDetails | ArcaError:
     emitter_cuit = _require_emitter_cuit(config.emitter_cuit)
     if isinstance(emitter_cuit, ArcaError):
         return emitter_cuit
-    token_result = _get_padron_wsaa_token(config.cert_path, config.key_path, config.environment, cuit=emitter_cuit)
+    token_result = await _get_padron_wsaa_token(config.cert_path, config.key_path, config.environment, cuit=emitter_cuit)
     if isinstance(token_result, ArcaError):
         return token_result
     token, sign = token_result
@@ -229,7 +229,7 @@ def get_taxpayer_details(cuit: str) -> PersonaDetails | ArcaError:
 
 
 @server.tool
-def validate_taxpayer_status(cuit: str) -> TaxpayerStatus | ArcaError:
+async def validate_taxpayer_status(cuit: str) -> TaxpayerStatus | ArcaError:
     """Verifica si un contribuyente está activo en el padrón ARCA A4.
 
     Retorna un resumen compacto con el estado activo/inactivo del CUIT
@@ -244,7 +244,7 @@ def validate_taxpayer_status(cuit: str) -> TaxpayerStatus | ArcaError:
     emitter_cuit = _require_emitter_cuit(config.emitter_cuit)
     if isinstance(emitter_cuit, ArcaError):
         return emitter_cuit
-    token_result = _get_padron_wsaa_token(config.cert_path, config.key_path, config.environment, cuit=emitter_cuit)
+    token_result = await _get_padron_wsaa_token(config.cert_path, config.key_path, config.environment, cuit=emitter_cuit)
     if isinstance(token_result, ArcaError):
         return token_result
     token, sign = token_result

@@ -50,7 +50,7 @@ def _build_overrides(
 
 
 @server.tool
-def validate_wsaa_login(
+async def validate_wsaa_login(
     cert_path: str | None = None,
     key_path: str | None = None,
     service: str = "wsfe",
@@ -67,7 +67,7 @@ def validate_wsaa_login(
     config = resolve_runtime_config(_build_overrides(cert_path, key_path, environment))
     if isinstance(config, ArcaError):
         return config
-    return _validate_wsaa(
+    return await _validate_wsaa(
         config.cert_path,
         config.key_path,
         service=service,
@@ -76,7 +76,7 @@ def validate_wsaa_login(
 
 
 @server.tool
-def validate_service_authorization(
+async def validate_service_authorization(
     cert_path: str | None = None,
     key_path: str | None = None,
     service: str = "wsfe",
@@ -96,7 +96,7 @@ def validate_service_authorization(
     config = resolve_runtime_config(_build_overrides(cert_path, key_path, environment))
     if isinstance(config, ArcaError):
         return config
-    return _validate_service(
+    return await _validate_service(
         config.cert_path,
         config.key_path,
         service=service,
@@ -105,7 +105,7 @@ def validate_service_authorization(
 
 
 @server.tool
-def setup_doctor(
+async def setup_doctor(
     cert_path: str | None = None,
     key_path: str | None = None,
     service: str = "wsfe",
@@ -129,7 +129,7 @@ def setup_doctor(
     config = resolve_runtime_config(_build_overrides(cert_path, key_path, environment))
     if isinstance(config, ArcaError):
         return config
-    return run_setup_doctor(
+    return await run_setup_doctor(
         config.cert_path,
         config.key_path,
         service=service,

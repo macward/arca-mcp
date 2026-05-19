@@ -30,7 +30,7 @@ def _skipped(name: str, reason: str) -> NamedCheck:
     return NamedCheck(name=name, ok=False, skipped=True, message=reason)
 
 
-def run_setup_doctor(
+async def run_setup_doctor(
     cert_path: Path,
     key_path: Path,
     service: str = "wsfe",
@@ -75,7 +75,7 @@ def run_setup_doctor(
         return SetupDoctorReport(checks=checks, all_ok=False, failed_check=failed)
 
     # 4. WSAA login
-    s = validate_wsaa_login(cert_path, key_path, service=service, environment=environment)
+    s = await validate_wsaa_login(cert_path, key_path, service=service, environment=environment)
     checks.append(NamedCheck(name="wsaa_login", ok=s.ok, cause=s.cause, message=s.message))
     if not s.ok:
         failed = "wsaa_login"

@@ -10,7 +10,9 @@ Verifica que cada tool:
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from arca_mcp.config_settings import Environment, Settings
 from arca_mcp.errors import ArcaError, ArcaErrorCause
@@ -90,33 +92,38 @@ class TestResolverErrorPropagation:
             cuit=None,
         )
 
-    def test_get_voucher_types_propagates_missing_config(self):
+    @pytest.mark.asyncio
+    async def test_get_voucher_types_propagates_missing_config(self):
         with patch("arca_mcp.config.get_server_settings", return_value=self._bare_settings()):
-            result = get_voucher_types()
+            result = await get_voucher_types()
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.MISSING_CONFIG
 
-    def test_get_document_types_propagates_missing_config(self):
+    @pytest.mark.asyncio
+    async def test_get_document_types_propagates_missing_config(self):
         with patch("arca_mcp.config.get_server_settings", return_value=self._bare_settings()):
-            result = get_document_types()
+            result = await get_document_types()
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.MISSING_CONFIG
 
-    def test_get_tax_types_propagates_missing_config(self):
+    @pytest.mark.asyncio
+    async def test_get_tax_types_propagates_missing_config(self):
         with patch("arca_mcp.config.get_server_settings", return_value=self._bare_settings()):
-            result = get_tax_types()
+            result = await get_tax_types()
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.MISSING_CONFIG
 
-    def test_get_aliquot_types_propagates_missing_config(self):
+    @pytest.mark.asyncio
+    async def test_get_aliquot_types_propagates_missing_config(self):
         with patch("arca_mcp.config.get_server_settings", return_value=self._bare_settings()):
-            result = get_aliquot_types()
+            result = await get_aliquot_types()
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.MISSING_CONFIG
 
-    def test_get_currency_types_propagates_missing_config(self):
+    @pytest.mark.asyncio
+    async def test_get_currency_types_propagates_missing_config(self):
         with patch("arca_mcp.config.get_server_settings", return_value=self._bare_settings()):
-            result = get_currency_types()
+            result = await get_currency_types()
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.MISSING_CONFIG
 
@@ -128,23 +135,25 @@ class TestResolverErrorPropagation:
 class TestWsaaLoginErrorPropagation:
     """Cuando WSAA login falla, las tools retornan ArcaError WSAA_AUTH_FAILED."""
 
-    def test_get_voucher_types_propagates_wsaa_failure(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_get_voucher_types_propagates_wsaa_failure(self, tmp_path):
         settings = _stub_settings(tmp_path)
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", return_value=_failed_wsaa_result()),
+            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_failed_wsaa_result())),
         ):
-            result = get_voucher_types()
+            result = await get_voucher_types()
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.WSAA_AUTH_FAILED
 
-    def test_get_document_types_propagates_wsaa_failure(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_get_document_types_propagates_wsaa_failure(self, tmp_path):
         settings = _stub_settings(tmp_path)
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", return_value=_failed_wsaa_result()),
+            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_failed_wsaa_result())),
         ):
-            result = get_document_types()
+            result = await get_document_types()
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.WSAA_AUTH_FAILED
 
@@ -162,25 +171,27 @@ class TestWsfeClientErrorPropagation:
             message="WSFEv1 SOAP Fault",
         )
 
-    def test_get_voucher_types_propagates_wsfe_error(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_get_voucher_types_propagates_wsfe_error(self, tmp_path):
         settings = _stub_settings(tmp_path)
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", return_value=_ok_wsaa_result()),
+            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_voucher_types", return_value=self._wsfe_error()),
         ):
-            result = get_voucher_types()
+            result = await get_voucher_types()
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.ARCA_SERVICE_ERROR
 
-    def test_get_currency_types_propagates_wsfe_error(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_get_currency_types_propagates_wsfe_error(self, tmp_path):
         settings = _stub_settings(tmp_path)
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", return_value=_ok_wsaa_result()),
+            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_currency_types", return_value=self._wsfe_error()),
         ):
-            result = get_currency_types()
+            result = await get_currency_types()
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.ARCA_SERVICE_ERROR
 
@@ -192,68 +203,74 @@ class TestWsfeClientErrorPropagation:
 class TestHappyPath:
     """Cuando resolver y clientes OK, las tools retornan lista de CatalogItem."""
 
-    def test_get_voucher_types_returns_catalog_items(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_get_voucher_types_returns_catalog_items(self, tmp_path):
         settings = _stub_settings(tmp_path)
         items = _catalog_items()
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", return_value=_ok_wsaa_result()),
+            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_voucher_types", return_value=items),
         ):
-            result = get_voucher_types()
+            result = await get_voucher_types()
         assert isinstance(result, list)
         assert len(result) == 2
         assert all(isinstance(item, CatalogItem) for item in result)
 
-    def test_get_document_types_returns_catalog_items(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_get_document_types_returns_catalog_items(self, tmp_path):
         settings = _stub_settings(tmp_path)
         items = _catalog_items()
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", return_value=_ok_wsaa_result()),
+            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_document_types", return_value=items),
         ):
-            result = get_document_types()
+            result = await get_document_types()
         assert isinstance(result, list)
         assert len(result) == 2
 
-    def test_get_tax_types_returns_catalog_items(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_get_tax_types_returns_catalog_items(self, tmp_path):
         settings = _stub_settings(tmp_path)
         items = _catalog_items()
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", return_value=_ok_wsaa_result()),
+            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_tax_types", return_value=items),
         ):
-            result = get_tax_types()
+            result = await get_tax_types()
         assert isinstance(result, list)
         assert len(result) == 2
 
-    def test_get_aliquot_types_returns_catalog_items(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_get_aliquot_types_returns_catalog_items(self, tmp_path):
         settings = _stub_settings(tmp_path)
         items = _catalog_items()
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", return_value=_ok_wsaa_result()),
+            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_aliquot_types", return_value=items),
         ):
-            result = get_aliquot_types()
+            result = await get_aliquot_types()
         assert isinstance(result, list)
         assert len(result) == 2
 
-    def test_get_currency_types_returns_catalog_items(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_get_currency_types_returns_catalog_items(self, tmp_path):
         settings = _stub_settings(tmp_path)
         items = _catalog_items()
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", return_value=_ok_wsaa_result()),
+            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_currency_types", return_value=items),
         ):
-            result = get_currency_types()
+            result = await get_currency_types()
         assert isinstance(result, list)
         assert len(result) == 2
 
-    def test_get_voucher_types_passes_correct_token_and_sign(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_get_voucher_types_passes_correct_token_and_sign(self, tmp_path):
         """La tool pasa el token y sign obtenidos de WSAA al cliente WSFEv1."""
         settings = _stub_settings(tmp_path)
         captured = {}
@@ -267,23 +284,24 @@ class TestHappyPath:
 
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", return_value=_ok_wsaa_result()),
+            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_voucher_types", side_effect=fake_get_voucher_types),
         ):
-            get_voucher_types()
+            await get_voucher_types()
 
         assert captured["token"] == "tok"
         assert captured["sign"] == "sig"
         assert captured["environment"] == "homologacion"
         assert captured["cuit"] == "20123456789"
 
-    def test_get_voucher_types_returns_empty_list_when_no_items(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_get_voucher_types_returns_empty_list_when_no_items(self, tmp_path):
         """Lista vacía es un resultado válido."""
         settings = _stub_settings(tmp_path)
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", return_value=_ok_wsaa_result()),
+            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_voucher_types", return_value=[]),
         ):
-            result = get_voucher_types()
+            result = await get_voucher_types()
         assert result == []
