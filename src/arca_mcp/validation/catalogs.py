@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 # Tipos de comprobante más comunes (IVA Responsable Inscripto)
 INVOICE_TYPES: frozenset[str] = frozenset({
     "1",   # Factura A
@@ -57,3 +59,20 @@ def is_valid_vat_condition(vat_condition: str) -> bool:
 def is_valid_currency(currency: str) -> bool:
     """Retorna True si el código de moneda existe en el catálogo AFIP."""
     return currency in CURRENCIES
+
+
+# Alícuotas de IVA: alicuota_id → tasa decimal
+# Fuente: Manual del Desarrollador COMPG — Tabla de Alícuotas
+IVA_ALIQUOTS: dict[str, Decimal] = {
+    "3": Decimal("0"),       # 0 %   — Exento
+    "4": Decimal("0.105"),   # 10.5 %
+    "5": Decimal("0.21"),    # 21 %
+    "6": Decimal("0.27"),    # 27 %
+    "8": Decimal("0.05"),    # 5 %
+    "9": Decimal("0.025"),   # 2.5 %
+}
+
+
+def is_valid_aliquot(alicuota_id: str) -> bool:
+    """Retorna True si la alícuota existe en el catálogo AFIP."""
+    return alicuota_id in IVA_ALIQUOTS
