@@ -246,7 +246,14 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
         draft_id: UUID del draft a confirmar (debe estar en estado VALIDATED).
         idempotency_key: Clave única de idempotencia para evitar doble emisión.
     """
-    # Step 1: Retrieve draft
+    # Step 1: Check idempotency — a retry with the same key always returns the
+    # cached result, regardless of the current draft status. This must run before
+    # the status check so that retries after a successful confirm are safe.
+    existing = await _idempotency_store.get(idempotency_key)
+    if existing is not None:
+        return existing
+
+    # Step 2: Retrieve draft
     draft = await _draft_store.get(draft_id)
     if draft is None:
         return {
@@ -256,7 +263,7 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
             }
         }
 
-    # Step 2: Verify draft is VALIDATED
+    # Step 3: Verify draft is VALIDATED
     if draft.status != DraftStatus.VALIDATED:
         return {
             "error": {
@@ -267,11 +274,6 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
                 ),
             }
         }
-
-    # Step 3: Check idempotency — return original result if already processed
-    existing = await _idempotency_store.get(idempotency_key)
-    if existing is not None:
-        return existing
 
     # Step 4: Resolve RuntimeConfig
     config = resolve_runtime_config()
