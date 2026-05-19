@@ -49,7 +49,7 @@ def cert_paths() -> tuple[Path, Path]:
     return cert, key
 
 
-def test_e2e_setup_doctor_all_green(cert_paths):
+async def test_e2e_setup_doctor_all_green(cert_paths):
     """E2E: el orquestador completo pasa los 5 checks contra homologación real.
 
     Nota: AFIP rate-limita las TA requests (mientras un TA está vivo, WSAA
@@ -58,7 +58,7 @@ def test_e2e_setup_doctor_all_green(cert_paths):
     llamada a WSAA — no se puede romper en sub-tests sin caché de token.
     """
     cert, key = cert_paths
-    report = run_setup_doctor(
+    report = await run_setup_doctor(
         cert, key, service=SERVICE, environment=WsaaEnvironment.HOMOLOGACION
     )
 
