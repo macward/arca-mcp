@@ -157,3 +157,19 @@ async def test_validate_wsaa_login_concurrent_single_network_call(
     assert call_login.call_count == 1
     assert all(r.ok for r in results)
     assert all(r.token is not None and r.token.token == "TOKEN123" for r in results)
+
+
+@pytest.mark.asyncio
+async def test_lock_released_after_refresh_fn_raises(cache: TokenCache):
+    """If refresh_fn raises, the lock is released so subsequent callers can retry."""
+
+    def _failing_login() -> WsaaToken:
+        raise ValueError("WSAA unreachable")
+
+    with pytest.raises(ValueError, match="WSAA unreachable"):
+        await cache.get_or_refresh(CUIT_A, _failing_login)
+
+    assert not cache._get_lock(CUIT_A).locked()
+
+    result = await cache.get_or_refresh(CUIT_A, lambda: _make_token())
+    assert result.token == "tok"

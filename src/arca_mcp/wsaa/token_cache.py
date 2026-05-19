@@ -7,6 +7,7 @@ A token is a miss if expired OR if it expires within the refresh threshold (defa
 
 Concurrency: get_or_refresh() uses one asyncio.Lock per CUIT (check-lock-check pattern)
 so that only one coroutine performs the login when multiple hit a cache miss simultaneously.
+The blocking refresh_fn is offloaded to a thread pool to avoid stalling the event loop.
 """
 
 import asyncio
@@ -16,6 +17,8 @@ import logging
 import os
 from collections.abc import Callable
 from pathlib import Path
+
+from pydantic import ValidationError
 
 from arca_mcp.wsaa.models import WsaaToken
 
@@ -103,7 +106,7 @@ class TokenCache:
             if self.is_near_expiry(token):
                 return None
             return token
-        except (KeyError, ValueError, OSError) as e:
+        except (ValueError, OSError, ValidationError) as e:
             logger.warning("TokenCache: token ignorado para cuit=%s: %s", cuit, e)
             return None
 
@@ -127,6 +130,7 @@ class TokenCache:
 
         Uses check-lock-check pattern: only one coroutine per CUIT performs
         the login when multiple hit a cache miss simultaneously.
+        refresh_fn is executed in a thread pool to avoid blocking the event loop.
         """
         token = self.get(cuit)
         if token is not None:
@@ -136,6 +140,7 @@ class TokenCache:
             token = self.get(cuit)
             if token is not None:
                 return token
-            token = refresh_fn()
+            loop = asyncio.get_running_loop()
+            token = await loop.run_in_executor(None, refresh_fn)
             self.save(cuit, token)
             return token

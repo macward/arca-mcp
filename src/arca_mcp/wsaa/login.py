@@ -17,15 +17,8 @@ from arca_mcp.wsaa.token_cache import TokenCache
 from arca_mcp.wsaa.tra import build_tra
 from arca_mcp.wsaa.wsaa_logger import WsaaCallResult, log_wsaa_call
 
-# Shared TokenCache instance — created once, avoids per-request _ensure_cache_dir() I/O.
-_shared_cache: TokenCache | None = None
-
-
-def _get_shared_cache() -> TokenCache:
-    global _shared_cache
-    if _shared_cache is None:
-        _shared_cache = TokenCache()
-    return _shared_cache
+# Eagerly initialized at module load — one instance per process, no per-request I/O.
+_shared_cache: TokenCache = TokenCache()
 
 
 async def validate_wsaa_login(
@@ -91,76 +84,13 @@ async def validate_wsaa_login(
         )
         return wsaa_token
 
-    if cuit is not None:
-        fs_cache = cache or _get_shared_cache()
-        try:
-            wsaa_token = await fs_cache.get_or_refresh(cuit, _do_network_login)
-        except CertificateLoadError as e:
-            _log(WsaaCallResult.FAILED, error_cause=f"cert_invalid: {e}")
-            return SetupCheckResult(ok=False, cause=ArcaErrorCause.CERT_INVALID, message=str(e))
-        except PrivateKeyLoadError as e:
-            _log(WsaaCallResult.FAILED, error_cause=f"key_invalid: {e}")
-            return SetupCheckResult(ok=False, cause=ArcaErrorCause.KEY_INVALID, message=str(e))
-        except (httpx.ConnectError, httpx.TimeoutException) as e:
-            _log(WsaaCallResult.FAILED, error_cause=f"wsaa_unreachable: {e}")
-            return SetupCheckResult(
-                ok=False,
-                cause=ArcaErrorCause.WSAA_UNREACHABLE,
-                message=f"No se pudo conectar a WSAA: {e}",
-            )
-        except httpx.HTTPStatusError as e:
-            _log(WsaaCallResult.FAILED, error_cause=f"http_{e.response.status_code}")
-            return SetupCheckResult(
-                ok=False,
-                cause=ArcaErrorCause.WSAA_AUTH_FAILED,
-                message=f"WSAA respondió HTTP {e.response.status_code}",
-            )
-        except ValueError as e:
-            msg = str(e)
-            msg_lower = msg.lower()
-            if "ya posee un ta valido" in msg_lower or "ya posee un ta válido" in msg_lower:
-                _log(WsaaCallResult.CACHED)
-                return SetupCheckResult(
-                    ok=True,
-                    message=(
-                        f"WSAA confirma auth previa válida para {service!r} "
-                        "(no se re-emite token mientras el TA anterior siga vivo). "
-                        "Proveer el parámetro `cuit` para usar el caché filesystem."
-                    ),
-                )
-            cause = ArcaErrorCause.WSAA_AUTH_FAILED
-            if "computador no autorizado" in msg_lower or "alias" in msg_lower:
-                cause = ArcaErrorCause.SERVICE_UNAUTHORIZED
-            _log(WsaaCallResult.FAILED, error_cause=f"soap_fault: {msg}")
-            return SetupCheckResult(ok=False, cause=cause, message=msg)
-        except Exception as e:
-            _log(WsaaCallResult.FAILED, error_cause=f"error: {e}")
-            return SetupCheckResult(
-                ok=False,
-                cause=ArcaErrorCause.WSAA_AUTH_FAILED,
-                message=str(e),
-            )
+    fs_cache = (cache if cache is not None else _shared_cache) if cuit is not None else None
 
-        # Warm in-memory if get_or_refresh returned a cached-from-disk token
-        if token_store.get_token(str(cert_path), str(key_path), str(environment), str(service)) is None:
-            token_store.put_token(
-                str(cert_path), str(key_path), str(environment), str(service),
-                wsaa_token.token, wsaa_token.sign, wsaa_token.expiration_time,
-            )
-
-        if not _network_called:
-            _log(WsaaCallResult.CACHED)
-            return SetupCheckResult(
-                ok=True,
-                message=f"Token WSAA restaurado del caché para servicio {service!r}.",
-                token=wsaa_token,
-            )
-        _log(WsaaCallResult.RETRIED if _was_retried else WsaaCallResult.OK)
-        return SetupCheckResult(ok=True, token=wsaa_token)
-
-    # No cuit: direct network call without filesystem cache or lock
     try:
-        wsaa_token = _do_network_login()
+        if fs_cache is not None:
+            wsaa_token = await fs_cache.get_or_refresh(cuit, _do_network_login)
+        else:
+            wsaa_token = _do_network_login()
     except CertificateLoadError as e:
         _log(WsaaCallResult.FAILED, error_cause=f"cert_invalid: {e}")
         return SetupCheckResult(ok=False, cause=ArcaErrorCause.CERT_INVALID, message=str(e))
@@ -207,6 +137,21 @@ async def validate_wsaa_login(
             message=str(e),
         )
 
+    # Warm in-memory cache if get_or_refresh returned a cached-from-disk token
+    if fs_cache is not None:
+        if token_store.get_token(str(cert_path), str(key_path), str(environment), str(service)) is None:
+            token_store.put_token(
+                str(cert_path), str(key_path), str(environment), str(service),
+                wsaa_token.token, wsaa_token.sign, wsaa_token.expiration_time,
+            )
+
+    if not _network_called:
+        _log(WsaaCallResult.CACHED)
+        return SetupCheckResult(
+            ok=True,
+            message=f"Token WSAA restaurado del caché para servicio {service!r}.",
+            token=wsaa_token,
+        )
     _log(WsaaCallResult.RETRIED if _was_retried else WsaaCallResult.OK)
     return SetupCheckResult(ok=True, token=wsaa_token)
 
