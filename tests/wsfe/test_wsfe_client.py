@@ -5,10 +5,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
 import zeep.exceptions
 
+import arca_mcp.wsfe.client as _wsfe_client_mod
 from arca_mcp.errors import ArcaError, ArcaErrorCause
 from arca_mcp.wsfe.client import (
+    _get_wsfe_client,
     get_aliquot_types,
     get_currency_types,
     get_voucher_types,
@@ -18,6 +21,14 @@ from arca_mcp.wsfe.models import CatalogItem
 TOKEN = "fake-token"
 SIGN = "fake-sign"
 ENV = "homologacion"
+
+
+@pytest.fixture(autouse=True)
+def clear_wsfe_client_cache():
+    """Limpia el cache de zeep.Client entre tests para que los mocks funcionen."""
+    _wsfe_client_mod._wsfe_clients.clear()
+    yield
+    _wsfe_client_mod._wsfe_clients.clear()
 CUIT = "20123456789"
 
 
@@ -244,3 +255,28 @@ class TestGetCurrencyTypes:
 
         assert isinstance(result, ArcaError)
         assert result.cause == ArcaErrorCause.ARCA_SERVICE_ERROR
+
+
+# ---------------------------------------------------------------------------
+# Client cache
+# ---------------------------------------------------------------------------
+
+class TestClientCache:
+    def test_same_url_returns_same_instance(self):
+        """Dos llamadas con la misma URL retornan la misma instancia de zeep.Client."""
+        mock_client = MagicMock()
+        with patch("arca_mcp.wsfe.client.zeep.Client", return_value=mock_client) as ctor:
+            first = _get_wsfe_client("https://example.com/test.wsdl")
+            second = _get_wsfe_client("https://example.com/test.wsdl")
+
+        assert first is second
+        assert ctor.call_count == 1
+
+    def test_different_urls_return_different_instances(self):
+        """URLs distintas crean clientes distintos."""
+        clients = [MagicMock(), MagicMock()]
+        with patch("arca_mcp.wsfe.client.zeep.Client", side_effect=clients):
+            first = _get_wsfe_client("https://example.com/a.wsdl")
+            second = _get_wsfe_client("https://example.com/b.wsdl")
+
+        assert first is not second

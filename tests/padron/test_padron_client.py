@@ -8,9 +8,18 @@ from unittest.mock import MagicMock, patch
 import pytest
 import zeep.exceptions
 
+import arca_mcp.padron.client as _padron_client_mod
 from arca_mcp.errors import ArcaError, ArcaErrorCause
-from arca_mcp.padron.client import get_persona
+from arca_mcp.padron.client import _get_padron_client, get_persona
 from arca_mcp.padron.models import FiscalAddress, PersonaDetails
+
+
+@pytest.fixture(autouse=True)
+def clear_padron_client_cache():
+    """Limpia el cache de zeep.Client entre tests para que los mocks funcionen."""
+    _padron_client_mod._padron_clients.clear()
+    yield
+    _padron_client_mod._padron_clients.clear()
 
 TOKEN = "fake-token"
 SIGN = "fake-sign"
@@ -330,3 +339,28 @@ class TestEnvironmentWsdl:
         assert kwargs["sign"] == SIGN
         assert kwargs["cuitRepresentada"] == EMITTER_CUIT
         assert kwargs["idPersona"] == QUERY_CUIT
+
+
+# ---------------------------------------------------------------------------
+# Client cache
+# ---------------------------------------------------------------------------
+
+class TestClientCache:
+    def test_same_url_returns_same_instance(self):
+        """Dos llamadas con la misma URL retornan la misma instancia de zeep.Client."""
+        mock_client = MagicMock()
+        with patch("arca_mcp.padron.client.zeep.Client", return_value=mock_client) as ctor:
+            first = _get_padron_client("https://example.com/test.wsdl")
+            second = _get_padron_client("https://example.com/test.wsdl")
+
+        assert first is second
+        assert ctor.call_count == 1
+
+    def test_different_urls_return_different_instances(self):
+        """URLs distintas crean clientes distintos."""
+        clients = [MagicMock(), MagicMock()]
+        with patch("arca_mcp.padron.client.zeep.Client", side_effect=clients):
+            first = _get_padron_client("https://example.com/a.wsdl")
+            second = _get_padron_client("https://example.com/b.wsdl")
+
+        assert first is not second

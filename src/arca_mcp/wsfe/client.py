@@ -11,6 +11,7 @@ Convención de retorno:
 
 from __future__ import annotations
 
+import threading
 from enum import StrEnum
 from typing import Union
 
@@ -19,6 +20,20 @@ import zeep.exceptions
 
 from arca_mcp.errors import ArcaError, ArcaErrorCause
 from arca_mcp.wsfe.models import CatalogItem
+
+# One zeep.Client per WSDL URL — avoids re-downloading/parsing the WSDL on every call.
+# Lock guards creation under streamable-http where multiple requests run concurrently.
+_wsfe_clients: dict[str, zeep.Client] = {}
+_wsfe_clients_lock = threading.Lock()
+
+
+def _get_wsfe_client(wsdl_url: str) -> zeep.Client:
+    if wsdl_url in _wsfe_clients:
+        return _wsfe_clients[wsdl_url]
+    with _wsfe_clients_lock:
+        if wsdl_url not in _wsfe_clients:
+            _wsfe_clients[wsdl_url] = zeep.Client(wsdl=wsdl_url)
+    return _wsfe_clients[wsdl_url]
 
 
 class WsfeEnvironment(StrEnum):
@@ -100,7 +115,7 @@ def _call_wsfe(
         return auth
 
     try:
-        client = zeep.Client(wsdl=wsdl_url)
+        client = _get_wsfe_client(wsdl_url)
         response = getattr(client.service, method)(Auth=auth)
     except zeep.exceptions.Fault as exc:
         return ArcaError(
