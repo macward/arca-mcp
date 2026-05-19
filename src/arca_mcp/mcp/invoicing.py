@@ -2,26 +2,32 @@
 
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 
 import fastmcp
 
+from arca_mcp.audit.emission_log import AuditLog
 from arca_mcp.config import resolve_runtime_config
 from arca_mcp.errors import ArcaError, ArcaErrorCause
 from arca_mcp.invoicing.draft_store import DraftStore
+from arca_mcp.invoicing.idempotency import IdempotencyStore
 from arca_mcp.invoicing.models import DraftStatus, VoucherDraft
 from arca_mcp.policy import invoicing as policy
 from arca_mcp.wsaa import WsaaEnvironment, validate_wsaa_login
 from arca_mcp.wsaa.models import SetupCheckResult
 from arca_mcp.wsfe import client as wsfe_client
-from arca_mcp.wsfe.models import FECompConsultarRequest
+from arca_mcp.wsfe.models import FECAESolicitarRequest, FECompConsultarRequest
 
 server = fastmcp.FastMCP("invoicing")
 
-# Module-level singleton — same pattern as TokenCache in wsaa.
+# Module-level singletons — same pattern as TokenCache in wsaa.
 _draft_store = DraftStore()
+_idempotency_store = IdempotencyStore()
+_audit_log = AuditLog(Path(os.environ.get("ARCA_AUDIT_LOG_PATH", "/tmp/arca_audit.jsonl")))
 
 _ENV_MAP = {
     "homologacion": WsaaEnvironment.HOMOLOGACION,
@@ -223,6 +229,130 @@ async def get_voucher_info(punto_venta: int, cbte_tipo: int, cbte_nro: int) -> d
         return result.model_dump()
 
     return result.model_dump()
+
+
+@server.tool
+async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
+    """Confirma la emisión de un comprobante a partir de un draft VALIDADO.
+
+    Solicita el CAE a WSFE (FECAESolicitar) y registra la operación en el
+    audit log. Solo se puede confirmar un draft en estado VALIDATED.
+    Requiere idempotency_key para prevenir doble emisión ante reintentos.
+
+    La configuración (cert, key, ambiente, CUIT) se toma de las variables de
+    entorno ARCA_CERT_PATH, ARCA_KEY_PATH, ARCA_ENVIRONMENT y ARCA_CUIT.
+
+    Args:
+        draft_id: UUID del draft a confirmar (debe estar en estado VALIDATED).
+        idempotency_key: Clave única de idempotencia para evitar doble emisión.
+    """
+    # Step 1: Retrieve draft
+    draft = await _draft_store.get(draft_id)
+    if draft is None:
+        return {
+            "error": {
+                "cause": "DRAFT_NOT_FOUND",
+                "message": f"No se encontró el draft con id '{draft_id}'.",
+            }
+        }
+
+    # Step 2: Verify draft is VALIDATED
+    if draft.status != DraftStatus.VALIDATED:
+        return {
+            "error": {
+                "cause": "DRAFT_NOT_VALIDATED",
+                "message": (
+                    f"Draft must be VALIDATED before confirmation. "
+                    f"Current status: {draft.status}"
+                ),
+            }
+        }
+
+    # Step 3: Check idempotency — return original result if already processed
+    existing = await _idempotency_store.get(idempotency_key)
+    if existing is not None:
+        return existing
+
+    # Step 4: Resolve RuntimeConfig
+    config = resolve_runtime_config()
+    if isinstance(config, ArcaError):
+        return config.model_dump()
+
+    emitter_cuit = _require_emitter_cuit(config.emitter_cuit)
+    if isinstance(emitter_cuit, ArcaError):
+        return emitter_cuit.model_dump()
+
+    # Step 5: Get WSAA token
+    token_result = await _get_wsaa_token(
+        config.cert_path,
+        config.key_path,
+        config.environment,
+        service="wsfe",
+        cuit=emitter_cuit,
+    )
+    if isinstance(token_result, ArcaError):
+        return token_result.model_dump()
+
+    token, sign = token_result
+
+    # Step 6: Call fecae_solicitar
+    fecae_request = FECAESolicitarRequest(
+        cuit=emitter_cuit,
+        punto_venta=draft.punto_venta,
+        cbte_tipo=draft.cbte_tipo,
+        fecha_cbte=draft.fecha_cbte,
+        cuit_receptor=draft.cuit_receptor,
+        doc_tipo=draft.doc_tipo,
+        imp_neto=draft.imp_neto,
+        imp_iva=draft.imp_iva,
+        imp_total=draft.imp_total,
+        alicuota_id=draft.alicuota_id,
+    )
+    wsfe_result = wsfe_client.fecae_solicitar(
+        token=token,
+        sign=sign,
+        environment=config.environment,
+        request=fecae_request,
+    )
+    if isinstance(wsfe_result, ArcaError):
+        return wsfe_result.model_dump()
+
+    # Handle rejected result from WSFE
+    if wsfe_result.resultado == "R":
+        obs_msg = "; ".join(wsfe_result.observaciones) if wsfe_result.observaciones else "sin observaciones"
+        return {
+            "error": {
+                "cause": "WSFE_REJECTED",
+                "message": f"WSFEv1 rechazó el comprobante. Observaciones: {obs_msg}",
+            }
+        }
+
+    # Step 7: Write to audit log
+    await _audit_log.append(
+        {
+            "draft_id": draft_id,
+            "cuit": emitter_cuit,
+            "cbte_nro": wsfe_result.cbte_nro,
+            "cae": wsfe_result.cae,
+            "idempotency_key": idempotency_key,
+        }
+    )
+
+    # Step 8: Update draft status to CONFIRMED
+    await _draft_store.update_status(draft_id, DraftStatus.CONFIRMED)
+
+    # Step 9: Persist idempotency result
+    result = {
+        "cae": wsfe_result.cae,
+        "cbte_nro": wsfe_result.cbte_nro,
+        "cae_fch_vto": wsfe_result.cae_fch_vto,
+        "draft_id": draft_id,
+        "idempotency_key": idempotency_key,
+    }
+    await _idempotency_store.set(idempotency_key, result)
+
+    # Step 10: Return result
+    return result
 
 
 @server.tool
