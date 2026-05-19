@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `create_voucher_draft` — creates a draft invoice in PENDING state; no fiscal operation is performed until the flow is completed
+- `validate_voucher_draft` — validates draft against fiscal policy rules; transitions to VALIDATED on success, stays PENDING on errors with violation details
+- `confirm_voucher_creation` — submits validated draft to WSFEv1 (FECAESolicitar), retrieves CAE, marks draft CONFIRMED; idempotency_key prevents double emission
+- `get_last_voucher_number` — queries last authorized voucher number for a given punto_venta and cbte_tipo
+- `get_voucher_info` — retrieves full details of a specific voucher from WSFEv1
+
 ## [0.3.0] - 2026-05-19
 
 ### Added
