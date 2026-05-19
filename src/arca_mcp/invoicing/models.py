@@ -9,16 +9,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field, computed_field, model_validator
 
-# IVA alicuota rates keyed by alicuota_id as defined in ARCA catalogs.
-# https://afip.gob.ar/fe/documentos/manual_developer_COMPG_v2.pdf — Table IVA
-_ALICUOTA_RATES: dict[str, Decimal] = {
-    "3": Decimal("0"),       # 0 %
-    "4": Decimal("0.105"),   # 10.5 %
-    "5": Decimal("0.21"),    # 21 %
-    "6": Decimal("0.27"),    # 27 %
-    "8": Decimal("0.05"),    # 5 %
-    "9": Decimal("0.025"),   # 2.5 %
-}
+from arca_mcp.validation.catalogs import IVA_ALIQUOTS as _ALICUOTA_RATES
 
 
 class DraftStatus(StrEnum):

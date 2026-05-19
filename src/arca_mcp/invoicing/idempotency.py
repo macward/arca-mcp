@@ -25,3 +25,20 @@ class IdempotencyStore:
         """Store *result* under *key*."""
         async with self._lock:
             self._store[key] = result
+
+    async def set_if_absent(self, key: str, value: dict) -> bool:
+        """Store *value* under *key* only if *key* is not already present.
+
+        Returns True if the key was claimed, False if it already existed.
+        Atomic under the store lock — safe against concurrent callers.
+        """
+        async with self._lock:
+            if key in self._store:
+                return False
+            self._store[key] = value
+            return True
+
+    async def delete(self, key: str) -> None:
+        """Remove *key* from the store (no-op if not present)."""
+        async with self._lock:
+            self._store.pop(key, None)

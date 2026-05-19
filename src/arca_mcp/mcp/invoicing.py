@@ -246,16 +246,40 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
         draft_id: UUID del draft a confirmar (debe estar en estado VALIDATED).
         idempotency_key: Clave única de idempotencia para evitar doble emisión.
     """
+    _CONFIRMING = {"status": "CONFIRMING"}
+    _IN_PROGRESS_ERROR = {
+        "error": {
+            "cause": "EMISSION_IN_PROGRESS",
+            "message": (
+                "Una emisión con esta clave de idempotencia ya está en curso. "
+                "Reintentá en unos segundos."
+            ),
+        }
+    }
+
     # Step 1: Check idempotency — a retry with the same key always returns the
-    # cached result, regardless of the current draft status. This must run before
-    # the status check so that retries after a successful confirm are safe.
+    # cached result. A CONFIRMING sentinel means a concurrent emission is in
+    # flight; return a clear error instead of the raw sentinel dict.
     existing = await _idempotency_store.get(idempotency_key)
     if existing is not None:
+        if existing.get("status") == "CONFIRMING":
+            return _IN_PROGRESS_ERROR
         return existing
 
-    # Step 2: Retrieve draft
+    # Step 2: Atomically claim the key before any I/O.
+    # set_if_absent is a single lock acquisition — no gap between the check
+    # and the write, so two concurrent callers can't both proceed.
+    claimed = await _idempotency_store.set_if_absent(idempotency_key, _CONFIRMING)
+    if not claimed:
+        return _IN_PROGRESS_ERROR
+
+    # From here every early-return path must release the claim via delete()
+    # so the caller can retry with the same key after fixing the error.
+
+    # Step 3: Retrieve draft
     draft = await _draft_store.get(draft_id)
     if draft is None:
+        await _idempotency_store.delete(idempotency_key)
         return {
             "error": {
                 "cause": "DRAFT_NOT_FOUND",
@@ -263,8 +287,9 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
             }
         }
 
-    # Step 3: Verify draft is VALIDATED
+    # Step 4: Verify draft is VALIDATED
     if draft.status != DraftStatus.VALIDATED:
+        await _idempotency_store.delete(idempotency_key)
         return {
             "error": {
                 "cause": "DRAFT_NOT_VALIDATED",
@@ -275,16 +300,18 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
             }
         }
 
-    # Step 4: Resolve RuntimeConfig
+    # Step 5: Resolve RuntimeConfig
     config = resolve_runtime_config()
     if isinstance(config, ArcaError):
+        await _idempotency_store.delete(idempotency_key)
         return config.model_dump()
 
     emitter_cuit = _require_emitter_cuit(config.emitter_cuit)
     if isinstance(emitter_cuit, ArcaError):
+        await _idempotency_store.delete(idempotency_key)
         return emitter_cuit.model_dump()
 
-    # Step 5: Get WSAA token
+    # Step 6: Get WSAA token
     token_result = await _get_wsaa_token(
         config.cert_path,
         config.key_path,
@@ -293,11 +320,12 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
         cuit=emitter_cuit,
     )
     if isinstance(token_result, ArcaError):
+        await _idempotency_store.delete(idempotency_key)
         return token_result.model_dump()
 
     token, sign = token_result
 
-    # Step 6: Call fecae_solicitar
+    # Step 7: Call fecae_solicitar — sentinel is already in place
     fecae_request = FECAESolicitarRequest(
         cuit=emitter_cuit,
         punto_venta=draft.punto_venta,
@@ -317,10 +345,11 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
         request=fecae_request,
     )
     if isinstance(wsfe_result, ArcaError):
+        await _idempotency_store.delete(idempotency_key)
         return wsfe_result.model_dump()
 
-    # Handle rejected result from WSFE
     if wsfe_result.resultado == "R":
+        await _idempotency_store.delete(idempotency_key)
         obs_msg = "; ".join(wsfe_result.observaciones) if wsfe_result.observaciones else "sin observaciones"
         return {
             "error": {
@@ -329,7 +358,7 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
             }
         }
 
-    # Step 7: Write to audit log
+    # Step 8: Write to audit log
     await _audit_log.append(
         {
             "draft_id": draft_id,
@@ -340,10 +369,10 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
         }
     )
 
-    # Step 8: Update draft status to CONFIRMED
+    # Step 9: Update draft status to CONFIRMED
     await _draft_store.update_status(draft_id, DraftStatus.CONFIRMED)
 
-    # Step 9: Persist idempotency result
+    # Step 10: Overwrite sentinel with the real result
     result = {
         "cae": wsfe_result.cae,
         "cbte_nro": wsfe_result.cbte_nro,
@@ -353,7 +382,6 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
     }
     await _idempotency_store.set(idempotency_key, result)
 
-    # Step 10: Return result
     return result
 
 
@@ -379,6 +407,17 @@ async def validate_voucher_draft(draft_id: str) -> dict:
             "error": {
                 "cause": "DRAFT_NOT_FOUND",
                 "message": f"Draft {draft_id} not found",
+            }
+        }
+
+    if draft.status != DraftStatus.PENDING:
+        return {
+            "error": {
+                "cause": "DRAFT_INVALID_STATUS",
+                "message": (
+                    f"validate_voucher_draft requires a PENDING draft. "
+                    f"Current status: {draft.status}"
+                ),
             }
         }
 

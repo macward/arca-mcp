@@ -32,6 +32,11 @@ class AuditLog:
             **entry,
         }
         line = json.dumps(record, ensure_ascii=False)
-        async with self._lock:
+
+        def _write() -> None:
             with self._path.open("a", encoding="utf-8") as fh:
                 fh.write(line + "\n")
+
+        async with self._lock:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, _write)

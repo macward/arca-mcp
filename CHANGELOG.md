@@ -7,12 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-19
+
 ### Added
 - `create_voucher_draft` — creates a draft invoice in PENDING state; no fiscal operation is performed until the flow is completed
 - `validate_voucher_draft` — validates draft against fiscal policy rules; transitions to VALIDATED on success, stays PENDING on errors with violation details
 - `confirm_voucher_creation` — submits validated draft to WSFEv1 (FECAESolicitar), retrieves CAE, marks draft CONFIRMED; idempotency_key prevents double emission
 - `get_last_voucher_number` — queries last authorized voucher number for a given punto_venta and cbte_tipo
 - `get_voucher_info` — retrieves full details of a specific voucher from WSFEv1
+- `IdempotencyStore.set_if_absent` — atomic check-and-set prevents concurrent callers from both reaching `fecae_solicitar` with the same key
+
+### Fixed
+- Double-emission window in `confirm_voucher_creation`: sentinel is now written atomically at Step 2 (before any I/O) via `set_if_absent`; concurrent callers receive `EMISSION_IN_PROGRESS` error instead of raw sentinel dict
+- `validate_voucher_draft` on non-PENDING drafts returned `INTERNAL_ERROR`; now returns structured `DRAFT_INVALID_STATUS` error
+- `TokenCache._get_lock` check-then-set pattern replaced with `defaultdict(asyncio.Lock)` to eliminate theoretical race window
+- `AuditLog.append` used synchronous `open()` inside asyncio lock, blocking the event loop; moved to `run_in_executor`
+- Production guard in `fecae_solicitar` and `_wsdl_url` compared against string literal `"produccion"`; now compares against `Environment.PRODUCCION` enum
+- `_ALICUOTA_RATES` duplicated between `invoicing/models.py` and `validation/catalogs.py`; `models.py` now imports `IVA_ALIQUOTS` from `catalogs.py`
 
 ## [0.3.0] - 2026-05-19
 

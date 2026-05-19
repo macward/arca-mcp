@@ -15,6 +15,7 @@ import datetime
 import json
 import logging
 import os
+from collections import defaultdict
 from collections.abc import Callable
 from pathlib import Path
 
@@ -47,7 +48,7 @@ class TokenCache:
         self._cache_dir = _resolve_cache_dir(cache_dir)
         self._refresh_threshold = datetime.timedelta(minutes=refresh_threshold_minutes)
         self._now = _now or (lambda: datetime.datetime.now(datetime.timezone.utc))
-        self._locks: dict[str, asyncio.Lock] = {}
+        self._locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._ensure_cache_dir()
 
     def _ensure_cache_dir(self) -> None:
@@ -68,8 +69,6 @@ class TokenCache:
         return self._cache_dir / f"{cuit}.json"
 
     def _get_lock(self, cuit: str) -> asyncio.Lock:
-        if cuit not in self._locks:
-            self._locks[cuit] = asyncio.Lock()
         return self._locks[cuit]
 
     def _parse_expiry(self, raw: str) -> datetime.datetime:

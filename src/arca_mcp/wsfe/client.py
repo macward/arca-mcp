@@ -19,6 +19,7 @@ from typing import Union
 import zeep
 import zeep.exceptions
 
+from arca_mcp.config_settings import Environment
 from arca_mcp.errors import ArcaError, ArcaErrorCause
 from arca_mcp.wsfe.models import (
     CatalogItem,
@@ -66,7 +67,7 @@ def _build_auth(token: str, sign: str, cuit: str | int) -> dict | ArcaError:
 
 def _wsdl_url(environment: str) -> str:
     """Retorna la URL del WSDL según el ambiente."""
-    if environment == "produccion":
+    if environment == Environment.PRODUCCION:
         return WsfeEnvironment.PRODUCCION
     return WsfeEnvironment.HOMOLOGACION
 
@@ -228,7 +229,7 @@ def fecae_solicitar(
     Solo disponible en homologación — el ambiente 'produccion' retorna ArcaError.
     Retorna FECAESolicitarResponse con el CAE otorgado o ArcaError si falla.
     """
-    if environment == "produccion":
+    if environment == Environment.PRODUCCION:
         return ArcaError(
             cause=ArcaErrorCause.UNSUPPORTED_ENVIRONMENT,
             message="fecae_solicitar solo está habilitado en homologación.",
