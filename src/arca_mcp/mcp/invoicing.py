@@ -11,7 +11,8 @@ import fastmcp
 from arca_mcp.config import resolve_runtime_config
 from arca_mcp.errors import ArcaError, ArcaErrorCause
 from arca_mcp.invoicing.draft_store import DraftStore
-from arca_mcp.invoicing.models import VoucherDraft
+from arca_mcp.invoicing.models import DraftStatus, VoucherDraft
+from arca_mcp.policy import invoicing as policy
 from arca_mcp.wsaa import WsaaEnvironment, validate_wsaa_login
 from arca_mcp.wsaa.models import SetupCheckResult
 from arca_mcp.wsfe import client as wsfe_client
@@ -222,3 +223,53 @@ async def get_voucher_info(punto_venta: int, cbte_tipo: int, cbte_nro: int) -> d
         return result.model_dump()
 
     return result.model_dump()
+
+
+@server.tool
+async def validate_voucher_draft(draft_id: str) -> dict:
+    """Valida un borrador de comprobante contra las reglas de política fiscal.
+
+    Si la validación es exitosa, el draft pasa a estado VALIDATED y queda
+    listo para ser confirmado con confirm_voucher_creation.
+    Si hay errores, el draft permanece en PENDING y se retornan los detalles
+    de cada violación encontrada.
+
+    Args:
+        draft_id: Identificador del draft a validar (UUID generado por create_voucher_draft).
+    """
+    try:
+        draft = await _draft_store.get(draft_id)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": {"cause": "INTERNAL_ERROR", "message": str(exc)}}
+
+    if draft is None:
+        return {
+            "error": {
+                "cause": "DRAFT_NOT_FOUND",
+                "message": f"Draft {draft_id} not found",
+            }
+        }
+
+    try:
+        report = policy.validate_draft(draft)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": {"cause": "INTERNAL_ERROR", "message": str(exc)}}
+
+    if report.is_valid:
+        try:
+            await _draft_store.update_status(draft_id, DraftStatus.VALIDATED)
+        except Exception as exc:  # noqa: BLE001
+            return {"error": {"cause": "INTERNAL_ERROR", "message": str(exc)}}
+        status = DraftStatus.VALIDATED
+    else:
+        status = draft.status
+
+    return {
+        "draft_id": draft_id,
+        "is_valid": report.is_valid,
+        "status": status.value,
+        "errors": [
+            {"field": e.field, "code": e.code, "message": e.message}
+            for e in report.errors
+        ],
+    }
