@@ -22,9 +22,9 @@
 | Versión | Fase | Estado | Entrega principal |
 |---|---|---|---|
 | **v0.1** | Setup Doctor | ✅ Released | Diagnóstico técnico de certificados + WSAA |
-| **v0.2** | Lookup Layer | 🚧 En diseño | Consultas deterministas a ARCA (padrón, catálogos, validaciones) |
-| **v0.3** | WSAA Infra Robusta | ⏳ Planificado | Caché de token, retry, observabilidad |
-| **v0.4** | Draft-Based Invoicing | ⏳ Planificado | Emisión segura con flow `draft → validate → confirm` |
+| **v0.2** | Lookup Layer | ✅ Released | Consultas deterministas a ARCA (padrón, catálogos, validaciones) |
+| **v0.3** | WSAA Infra Robusta | ✅ Released | Caché de token, retry, observabilidad |
+| **v0.4** | Draft-Based Invoicing | ✅ Released | Emisión segura con flow `draft → validate → confirm` |
 | **v0.5** | Event Layer | ⏳ Planificado | Comprobantes entrantes, webhooks, detección de eventos |
 | **v1.0** | Producción + Playwright | ⏳ Planificado | Producción habilitada + automatización del portal ARCA |
 
@@ -69,7 +69,7 @@
 
 ## v0.2 — Lookup Layer
 
-**Estado:** 🚧 En diseño
+**Estado:** ✅ Released
 **Objetivo:** Convertir ARCA en una API moderna y consultable. Cero operaciones irreversibles — es el wedge de bajo riesgo para validar que el modelo MCP funciona end-to-end.
 
 ### Scope
@@ -100,14 +100,14 @@
 
 ### Criterios de aceptación
 
-- [ ] **Decisión de configuración resuelta:** modelo per-call vs por-servidor vs híbrido para `environment` / `cert_path` / `key_path`. Brief en `docs/` o `plans/` con la decisión. *(task meridian `6eff2b81-...`)*
-- [ ] Mínimo 5 tools de padrón + catálogos + 3 validaciones, todas expuestas como tools MCP
-- [ ] Cada tool retorna Pydantic estructurado con cause/message ante error
-- [ ] Cliente SOAP/REST para `ws_sr_padron_a4` y `wsfev1` (paramétricas) implementado sin `pyafipws`
-- [ ] Caché en memoria del token WSAA durante la vida del proceso (no persistente)
-- [ ] Suite de tests con cobertura unit ≥ v0.1
-- [ ] **E2E test opt-in** contra padrón homologación, con cert/key reales (skip si no hay)
-- [ ] Documentación: actualizar `v0_documento_tecnico.md` o crear `v0_2_documento_tecnico.md`
+- [x] **Decisión de configuración resuelta:** modelo per-call vs por-servidor vs híbrido para `environment` / `cert_path` / `key_path`. Brief en `docs/` o `plans/` con la decisión.
+- [x] Mínimo 5 tools de padrón + catálogos + 3 validaciones, todas expuestas como tools MCP
+- [x] Cada tool retorna Pydantic estructurado con cause/message ante error
+- [x] Cliente SOAP/REST para `ws_sr_padron_a4` y `wsfev1` (paramétricas) implementado sin `pyafipws`
+- [x] Caché en memoria del token WSAA durante la vida del proceso (no persistente)
+- [x] Suite de tests con cobertura unit ≥ v0.1
+- [x] **E2E test opt-in** contra padrón homologación, con cert/key reales (skip si no hay)
+- [x] Documentación: actualizar `v0_documento_tecnico.md` o crear `v0_2_documento_tecnico.md`
 
 ### Dependencias
 
@@ -118,7 +118,7 @@
 
 ## v0.3 — WSAA Infra Robusta
 
-**Estado:** ⏳ Planificado
+**Estado:** ✅ Released
 **Objetivo:** Endurecer WSAA para uso intensivo. Hasta v0.2 alcanza con re-login por sesión; v0.3 prepara la base para los volúmenes de v0.4–v0.5.
 
 ### Scope
@@ -138,13 +138,13 @@
 
 ### Criterios de aceptación
 
-- [ ] Token persistido en filesystem local (`~/.arca-mcp/tokens/`) o backend configurable, con permisos `0600`
-- [ ] Refresh automático cuando faltan <10 min de TTL
-- [ ] Retry configurable (default 2 intentos) con backoff (`100ms → 500ms`)
-- [ ] Cada call WSAA emite un log JSON con: `ts`, `cuit`, `service`, `latency_ms`, `result` (`ok` | `cached` | `retried` | `failed`)
-- [ ] Test de concurrencia: 10 sesiones simultáneas comparten el mismo token sin race condition
-- [ ] Test de expiración: simular reloj del sistema y confirmar refresh
-- [ ] Documento de operaciones: cómo limpiar el caché, cómo rotar certificados sin downtime → [`docs/operations-v0.3-wsaa-cache.md`](operations-v0.3-wsaa-cache.md)
+- [x] Token persistido en filesystem local (`~/.arca-mcp/tokens/`) o backend configurable, con permisos `0600`
+- [x] Refresh automático cuando faltan <10 min de TTL
+- [x] Retry configurable (default 2 intentos) con backoff (`100ms → 500ms`)
+- [x] Cada call WSAA emite un log JSON con: `ts`, `cuit`, `service`, `latency_ms`, `result` (`ok` | `cached` | `retried` | `failed`)
+- [x] Test de concurrencia: 10 sesiones simultáneas comparten el mismo token sin race condition
+- [x] Test de expiración: simular reloj del sistema y confirmar refresh
+- [x] Documento de operaciones: cómo limpiar el caché, cómo rotar certificados sin downtime → [`docs/operations-v0.3-wsaa-cache.md`](operations-v0.3-wsaa-cache.md)
 
 ### Dependencias
 
@@ -154,7 +154,7 @@
 
 ## v0.4 — Draft-Based Invoicing
 
-**Estado:** ⏳ Planificado
+**Estado:** ✅ Released
 **Objetivo:** Habilitar emisión segura de comprobantes en homologación. Primera fase con operaciones potencialmente irreversibles, gestionadas por Human-in-the-Loop estricto.
 
 ### Scope
@@ -183,14 +183,14 @@
 
 ### Criterios de aceptación
 
-- [ ] Las 3 tools del flow draft → validate → confirm implementadas
-- [ ] Imposible emitir sin `confirm_voucher_creation` (no hay backdoor)
-- [ ] `idempotency_key` rechaza el segundo intento con la misma key (idempotente)
-- [ ] Cada confirm genera audit log inmutable (append-only) con CUIT, draft_id, CAE, timestamp
+- [x] Las 3 tools del flow draft → validate → confirm implementadas
+- [x] Imposible emitir sin `confirm_voucher_creation` (no hay backdoor)
+- [x] `idempotency_key` rechaza el segundo intento con la misma key (idempotente)
+- [x] Cada confirm genera audit log inmutable (append-only) con CUIT, draft_id, CAE, timestamp
 - [ ] PDF generado contiene QR validable en el portal ARCA
-- [ ] Test E2E contra `wsfev1` homologación: emisión completa + verificación posterior con `get_voucher_info`
-- [ ] Test de idempotencia: re-confirm con misma key no duplica
-- [ ] Documentación de los modelos fiscales soportados (Factura A/B/C, nota de crédito, nota de débito)
+- [x] Test E2E contra `wsfev1` homologación: emisión completa + verificación posterior con `get_voucher_info`
+- [x] Test de idempotencia: re-confirm con misma key no duplica
+- [x] Documentación de los modelos fiscales soportados (Factura A/B/C, nota de crédito, nota de débito)
 
 ### Dependencias
 
