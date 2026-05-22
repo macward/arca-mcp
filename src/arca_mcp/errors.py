@@ -25,6 +25,8 @@ class ArcaErrorCause(StrEnum):
     INVALID_CATALOG_VALUE = "INVALID_CATALOG_VALUE"
     # Padrón
     PADRON_NOT_FOUND = "PADRON_NOT_FOUND"
+    # Facturación
+    INVALID_CAE = "INVALID_CAE"
 
 
 class ArcaError(BaseModel):

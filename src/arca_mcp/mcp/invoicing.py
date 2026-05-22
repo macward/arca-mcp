@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import os
 import uuid
 from datetime import datetime, timezone
@@ -14,6 +15,8 @@ from arca_mcp.audit.emission_log import AuditLog
 from arca_mcp.config import resolve_runtime_config
 from arca_mcp.errors import ArcaError, ArcaErrorCause
 from arca_mcp.invoicing.draft_store import DraftStore
+from arca_mcp.invoicing.pdf import ConfirmedVoucherInput, generate_invoice_pdf
+from arca_mcp.invoicing.qr import QRPayload, build_qr_url, generate_qr_png
 from arca_mcp.invoicing.idempotency import IdempotencyStore
 from arca_mcp.invoicing.models import DraftStatus, VoucherDraft
 from arca_mcp.policy import invoicing as policy
@@ -76,6 +79,173 @@ def _require_emitter_cuit(emitter_cuit: str | None) -> str | ArcaError:
             message=f"ARCA_CUIT debe contener solo dígitos: {emitter_cuit!r}",
         )
     return cuit
+
+
+@server.tool
+async def generate_qr(
+    fecha: str,
+    cuit: str,
+    ptoVta: int,
+    tipoCmp: int,
+    nroCmp: int,
+    importe: float,
+    moneda: str,
+    ctz: float,
+    tipoDocRec: int,
+    nroDocRec: str,
+    codAut: str,
+) -> dict:
+    """Genera el código QR AFIP para un comprobante confirmado.
+
+    Operación local pura — no requiere WSAA ni certificado.
+    Retorna la URL del QR y la imagen PNG codificada en Base64.
+
+    Args:
+        fecha: Fecha del comprobante en formato YYYY-MM-DD.
+        cuit: CUIT del emisor (11 dígitos).
+        ptoVta: Número de punto de venta.
+        tipoCmp: Tipo de comprobante.
+        nroCmp: Número del comprobante.
+        importe: Importe total del comprobante.
+        moneda: Código de moneda (ej: "PES").
+        ctz: Cotización de la moneda.
+        tipoDocRec: Tipo de documento del receptor.
+        nroDocRec: Número de documento del receptor.
+        codAut: CAE de 14 dígitos numéricos.
+    """
+    try:
+        payload = QRPayload(
+            fecha=fecha,
+            cuit=cuit,
+            ptoVta=ptoVta,
+            tipoCmp=tipoCmp,
+            nroCmp=nroCmp,
+            importe=importe,
+            moneda=moneda,
+            ctz=ctz,
+            tipoDocRec=tipoDocRec,
+            nroDocRec=nroDocRec,
+            codAut=codAut,
+        )
+    except Exception as exc:  # noqa: BLE001 — Pydantic ValidationError
+        msg = str(exc)
+        cause = ArcaErrorCause.INVALID_CAE if "codAut" in msg else ArcaErrorCause.INVALID_CATALOG_VALUE
+        return {"error": {"cause": cause, "message": msg}}
+
+    url_result = build_qr_url(payload)
+    if isinstance(url_result, ArcaError):
+        return {"error": url_result.model_dump()}
+
+    try:
+        qr_png = generate_qr_png(payload)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": {"cause": ArcaErrorCause.ARCA_SERVICE_ERROR, "message": str(exc)}}
+
+    return {
+        "qr_url": url_result,
+        "qr_png_b64": base64.b64encode(qr_png).decode(),
+    }
+
+
+@server.tool
+async def generate_invoice_pdf_tool(
+    cbte_tipo: int,
+    punto_venta: int,
+    cbte_nro: int,
+    fecha_cbte: str,
+    cae: str,
+    cae_fch_vto: str,
+    imp_neto: str,
+    alicuota_id: str,
+    cuit_emisor: str,
+    emisor_razon_social: str,
+    emisor_domicilio: str,
+    cuit_receptor: str,
+    doc_tipo: int,
+    moneda: str = "PES",
+    ctz: float = 1.0,
+    nro_doc_receptor: str | None = None,
+    receptor_razon_social: str | None = None,
+) -> dict:
+    """Genera el PDF de una factura electrónica confirmada con QR AFIP embebido.
+
+    Operación local pura — no requiere WSAA ni certificado.
+    Retorna el PDF en Base64 y el nombre de archivo sugerido.
+
+    Args:
+        cbte_tipo: Tipo de comprobante (ej: 1=Factura A, 6=Factura B).
+        punto_venta: Número de punto de venta.
+        cbte_nro: Número del comprobante confirmado.
+        fecha_cbte: Fecha del comprobante en formato YYYYMMDD.
+        cae: CAE de 14 dígitos numéricos.
+        cae_fch_vto: Fecha de vencimiento del CAE en formato YYYYMMDD.
+        imp_neto: Importe neto gravado como string.
+        alicuota_id: Identificador de alícuota IVA (ej: "5" = 21%).
+        cuit_emisor: CUIT del emisor (11 dígitos).
+        emisor_razon_social: Razón social del emisor.
+        emisor_domicilio: Domicilio fiscal del emisor.
+        cuit_receptor: CUIT del receptor (11 dígitos).
+        doc_tipo: Tipo de documento del receptor (80=CUIT, 96=DNI, 99=Consumidor Final).
+        moneda: Código de moneda (default "PES").
+        ctz: Cotización de la moneda (default 1.0).
+        nro_doc_receptor: Número de documento del receptor para el QR. Auto-derivado si None:
+            doc_tipo=80 → cuit_receptor, doc_tipo=99 → "0". Requerido para otros doc_tipo.
+        receptor_razon_social: Razón social del receptor (opcional).
+    """
+    try:
+        imp_neto_decimal = Decimal(imp_neto)
+    except InvalidOperation:
+        return {
+            "error": ArcaError(
+                cause=ArcaErrorCause.INVALID_CATALOG_VALUE,
+                message=f"imp_neto no es un número válido: {imp_neto!r}",
+            ).model_dump()
+        }
+
+    try:
+        voucher = ConfirmedVoucherInput(
+            cbte_tipo=cbte_tipo,
+            punto_venta=punto_venta,
+            cbte_nro=cbte_nro,
+            fecha_cbte=fecha_cbte,
+            cae=cae,
+            cae_fch_vto=cae_fch_vto,
+            imp_neto=imp_neto_decimal,
+            alicuota_id=alicuota_id,
+            moneda=moneda,
+            ctz=ctz,
+            cuit_emisor=cuit_emisor,
+            emisor_razon_social=emisor_razon_social,
+            emisor_domicilio=emisor_domicilio,
+            cuit_receptor=cuit_receptor,
+            doc_tipo=doc_tipo,
+            nro_doc_receptor=nro_doc_receptor,
+            receptor_razon_social=receptor_razon_social,
+        )
+    except Exception as exc:  # noqa: BLE001 — Pydantic ValidationError
+        return {
+            "error": ArcaError(
+                cause=ArcaErrorCause.INVALID_CATALOG_VALUE,
+                message=str(exc),
+            ).model_dump()
+        }
+
+    try:
+        pdf_bytes = generate_invoice_pdf(voucher)
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "error": ArcaError(
+                cause=ArcaErrorCause.ARCA_SERVICE_ERROR,
+                message=str(exc),
+            ).model_dump()
+        }
+
+    # cbte_tipo is intentionally not zero-padded; punto_venta and cbte_nro are.
+    filename = f"factura_{cbte_tipo}_{punto_venta:05d}_{cbte_nro:08d}.pdf"
+    return {
+        "pdf_b64": base64.b64encode(pdf_bytes).decode(),
+        "filename": filename,
+    }
 
 
 @server.tool

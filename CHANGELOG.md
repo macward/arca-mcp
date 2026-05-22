@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-22
+
+### Added
+- `generate_invoice_pdf_tool` — genera un PDF de comprobante fiscal con formato estándar (encabezado, emisor/receptor, tabla de importes, CAE y QR embebido); retorna el PDF en base64 listo para descargar
+- `generate_qr` — genera el código QR oficial ARCA (RG 4291/2018) de forma independiente; retorna la URL y el PNG en base64
+- `ConfirmedVoucherInput` (`invoicing/pdf.py`) — modelo Pydantic que valida todos los campos del comprobante; auto-deriva `nro_doc_receptor` según `doc_tipo` (80→CUIT, 99→"0", otros→requerido explícito)
+- `QRPayload` + `build_qr_url` + `generate_qr_png` (`invoicing/qr.py`) — construcción del payload QR según spec ARCA, codificación base64url y generación del PNG
+- `ArcaErrorCause.INVALID_CAE` — nueva causa de error para CAEs inválidos
+- Dependencias runtime: `qrcode[pil]>=7.4`, `reportlab>=4.5.1`
+- Tests: 23 nuevos tests unitarios e integración (QR payload, QR PNG, PDF, tools MCP)
+
+### Fixed
+- `nro_doc_receptor` en el QR ahora refleja correctamente el tipo de documento del receptor: consumidores finales usan "0", personas físicas con DNI usan el número de DNI explícito; antes se usaba siempre el CUIT del receptor
+
 ## [0.4.0] - 2026-05-19
 
 ### Added
