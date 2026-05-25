@@ -1,6 +1,8 @@
 .env
 .codex/
 *.key
+*.crt
+audit*.jsonl
 *.pem
 *.p12
 *.pfx

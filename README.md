@@ -2,7 +2,7 @@
 
 MCP server para operaciones fiscales con ARCA/AFIP. Expone herramientas deterministas para consulta de catálogos, validación de contribuyentes y emisión de comprobantes mediante un flujo Human-in-the-Loop.
 
-> **Estado:** v0.4.0 — solo homologación. Producción habilitada en v1.0.
+> **Estado:** v0.5.0 — solo homologación. Producción habilitada en v1.0.
 
 ---
 
@@ -17,7 +17,7 @@ MCP server para operaciones fiscales con ARCA/AFIP. Expone herramientas determin
 ## Instalación
 
 ```bash
-git clone https://github.com/tu-org/arca-mcp
+git clone https://github.com/macward/arca-mcp
 cd arca-mcp
 uv sync
 ```
