@@ -1,4 +1,5 @@
 .env
+.codex/
 *.key
 *.pem
 *.p12

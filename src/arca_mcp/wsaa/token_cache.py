@@ -110,11 +110,13 @@ class TokenCache:
             return None
 
     def save(self, cuit: str, token: WsaaToken) -> None:
-        """Persist token to disk with 0600 permissions."""
+        """Persist token to disk with 0600 permissions (atomic write)."""
         self._cache_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         path = self._path(cuit)
-        path.write_text(token.model_dump_json())
-        path.chmod(0o600)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(token.model_dump_json())
+        os.chmod(tmp, 0o600)
+        tmp.replace(path)
 
     def invalidate(self, cuit: str) -> None:
         """Remove cached token for the given CUIT."""

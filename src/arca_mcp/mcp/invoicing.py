@@ -30,7 +30,17 @@ server = fastmcp.FastMCP("invoicing")
 # Module-level singletons — same pattern as TokenCache in wsaa.
 _draft_store = DraftStore()
 _idempotency_store = IdempotencyStore()
-_audit_log = AuditLog(Path(os.environ.get("ARCA_AUDIT_LOG_PATH", "/tmp/arca_audit.jsonl")))
+def _default_audit_log_path() -> Path:
+    base = Path.home() / ".arca-mcp"
+    base.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return base / "audit.jsonl"
+
+
+_audit_log = AuditLog(
+    Path(os.environ.get("ARCA_AUDIT_LOG_PATH") or "").expanduser()
+    if os.environ.get("ARCA_AUDIT_LOG_PATH")
+    else _default_audit_log_path()
+)
 
 _ENV_MAP = {
     "homologacion": WsaaEnvironment.HOMOLOGACION,

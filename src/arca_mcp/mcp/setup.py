@@ -6,7 +6,7 @@ import fastmcp
 
 from arca_mcp.config import ConfigOverrides, resolve_runtime_config
 from arca_mcp.config_settings import Environment
-from arca_mcp.errors import ArcaError
+from arca_mcp.errors import ArcaError, ArcaErrorCause
 from arca_mcp.wsaa import (
     SetupCheckResult,
     SetupDoctorReport,
@@ -18,11 +18,22 @@ from arca_mcp.wsaa import (
 
 server = fastmcp.FastMCP("setup")
 
+ALLOWED_WSAA_SERVICES: frozenset[str] = frozenset({"wsfe", "ws_sr_padron_a4"})
 
 _ENV_MAP = {
     Environment.HOMOLOGACION: WsaaEnvironment.HOMOLOGACION,
     Environment.PRODUCCION: WsaaEnvironment.PRODUCCION,
 }
+
+
+def _check_service(service: str) -> ArcaError | None:
+    if service not in ALLOWED_WSAA_SERVICES:
+        allowed = ", ".join(sorted(ALLOWED_WSAA_SERVICES))
+        return ArcaError(
+            cause=ArcaErrorCause.SERVICE_UNAUTHORIZED,
+            message=f"Servicio {service!r} no permitido. Servicios válidos: {allowed}",
+        )
+    return None
 
 
 def _build_overrides(
@@ -64,6 +75,8 @@ async def validate_wsaa_login(
 
     `environment`: "homologacion" (default) o "produccion".
     """
+    if err := _check_service(service):
+        return err
     config = resolve_runtime_config(_build_overrides(cert_path, key_path, environment))
     if isinstance(config, ArcaError):
         return config
@@ -93,6 +106,8 @@ async def validate_service_authorization(
 
     `environment`: "homologacion" (default) o "produccion".
     """
+    if err := _check_service(service):
+        return err
     config = resolve_runtime_config(_build_overrides(cert_path, key_path, environment))
     if isinstance(config, ArcaError):
         return config
@@ -126,6 +141,8 @@ async def setup_doctor(
 
     `environment`: "homologacion" (default) o "produccion".
     """
+    if err := _check_service(service):
+        return err
     config = resolve_runtime_config(_build_overrides(cert_path, key_path, environment))
     if isinstance(config, ArcaError):
         return config
