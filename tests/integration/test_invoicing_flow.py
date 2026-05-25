@@ -118,7 +118,7 @@ class TestFullFlowFacturaB:
         with (
             patch("arca_mcp.mcp.invoicing.resolve_runtime_config", return_value=config),
             patch(
-                "arca_mcp.mcp.invoicing.validate_wsaa_login",
+                "arca_mcp.mcp._auth.validate_wsaa_login",
                 new=AsyncMock(return_value=_ok_wsaa_result()),
             ),
             patch(
@@ -213,7 +213,7 @@ class TestDoubleConfirmIdempotency:
         with (
             patch("arca_mcp.mcp.invoicing.resolve_runtime_config", return_value=config),
             patch(
-                "arca_mcp.mcp.invoicing.validate_wsaa_login",
+                "arca_mcp.mcp._auth.validate_wsaa_login",
                 new=AsyncMock(return_value=_ok_wsaa_result()),
             ),
             patch(
@@ -340,7 +340,7 @@ class TestGetLastVoucherNumber:
         with (
             patch("arca_mcp.mcp.invoicing.resolve_runtime_config", return_value=config),
             patch(
-                "arca_mcp.mcp.invoicing.validate_wsaa_login",
+                "arca_mcp.mcp._auth.validate_wsaa_login",
                 new=AsyncMock(return_value=_ok_wsaa_result()),
             ),
             patch(

@@ -119,7 +119,7 @@ class TestGetTaxpayerDetailsHappyPath:
         settings = _stub_settings(tmp_path)
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.padron_client.get_persona", return_value=_persona_activo()),
         ):
             result = await get_taxpayer_details("20123456789")
@@ -143,7 +143,7 @@ class TestGetTaxpayerDetailsHappyPath:
 
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.padron_client.get_persona", side_effect=fake_get_persona),
         ):
             await get_taxpayer_details("20123456789")
@@ -165,7 +165,7 @@ class TestGetTaxpayerDetailsHappyPath:
 
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", side_effect=fake_validate_wsaa_login),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", side_effect=fake_validate_wsaa_login),
             patch("arca_mcp.mcp.lookup.padron_client.get_persona", return_value=_persona_activo()),
         ):
             await get_taxpayer_details("20123456789")
@@ -191,7 +191,7 @@ class TestGetTaxpayerDetailsErrors:
         settings = _stub_settings(tmp_path)
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_failed_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_failed_wsaa_result())),
         ):
             result = await get_taxpayer_details("20123456789")
         assert isinstance(result, ArcaError)
@@ -202,7 +202,7 @@ class TestGetTaxpayerDetailsErrors:
         settings = _stub_settings(tmp_path)
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.padron_client.get_persona", return_value=_padron_not_found_error()),
         ):
             result = await get_taxpayer_details("20000000000")
@@ -221,7 +221,7 @@ class TestValidateTaxpayerStatusHappyPath:
         settings = _stub_settings(tmp_path)
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.padron_client.get_persona", return_value=_persona_activo()),
         ):
             result = await validate_taxpayer_status("20123456789")
@@ -235,7 +235,7 @@ class TestValidateTaxpayerStatusHappyPath:
         settings = _stub_settings(tmp_path)
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.padron_client.get_persona", return_value=_persona_inactivo()),
         ):
             result = await validate_taxpayer_status("20999999990")
@@ -255,7 +255,7 @@ class TestValidateTaxpayerStatusHappyPath:
         )
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.padron_client.get_persona", return_value=persona),
         ):
             result = await validate_taxpayer_status("20111111118")
@@ -282,7 +282,7 @@ class TestValidateTaxpayerStatusErrors:
         settings = _stub_settings(tmp_path)
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_failed_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_failed_wsaa_result())),
         ):
             result = await validate_taxpayer_status("20123456789")
         assert isinstance(result, ArcaError)
@@ -293,7 +293,7 @@ class TestValidateTaxpayerStatusErrors:
         settings = _stub_settings(tmp_path)
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.padron_client.get_persona", return_value=_padron_not_found_error()),
         ):
             result = await validate_taxpayer_status("20000000000")

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import functools
 import os
 import uuid
 from datetime import datetime, timezone
@@ -19,9 +21,9 @@ from arca_mcp.invoicing.pdf import ConfirmedVoucherInput, generate_invoice_pdf
 from arca_mcp.invoicing.qr import QRPayload, build_qr_url, generate_qr_png
 from arca_mcp.invoicing.idempotency import IdempotencyStore
 from arca_mcp.invoicing.models import DraftStatus, VoucherDraft
+from arca_mcp.mcp._auth import get_wsaa_token as _get_wsaa_token
+from arca_mcp.mcp._auth import require_emitter_cuit as _require_emitter_cuit
 from arca_mcp.policy import invoicing as policy
-from arca_mcp.wsaa import WsaaEnvironment, validate_wsaa_login
-from arca_mcp.wsaa.models import SetupCheckResult
 from arca_mcp.wsfe import client as wsfe_client
 from arca_mcp.wsfe.models import FECAESolicitarRequest, FECompConsultarRequest
 
@@ -41,55 +43,6 @@ _audit_log = AuditLog(
     if os.environ.get("ARCA_AUDIT_LOG_PATH")
     else _default_audit_log_path()
 )
-
-_ENV_MAP = {
-    "homologacion": WsaaEnvironment.HOMOLOGACION,
-    "produccion": WsaaEnvironment.PRODUCCION,
-}
-
-
-async def _get_wsaa_token(
-    cert_path,
-    key_path,
-    environment: str,
-    service: str,
-    cuit: str | None = None,
-) -> tuple[str, str] | ArcaError:
-    """Obtiene token y sign de WSAA para el servicio indicado."""
-    wsaa_env = _ENV_MAP.get(environment, WsaaEnvironment.HOMOLOGACION)
-    result: SetupCheckResult = await validate_wsaa_login(
-        cert_path,
-        key_path,
-        service=service,
-        environment=wsaa_env,
-        cuit=cuit,
-    )
-    if not result.ok or result.token is None:
-        return ArcaError(
-            cause=ArcaErrorCause.WSAA_AUTH_FAILED,
-            message=result.message or "WSAA login falló sin mensaje de error.",
-        )
-    return result.token.token, result.token.sign
-
-
-def _require_emitter_cuit(emitter_cuit: str | None) -> str | ArcaError:
-    """Retorna CUIT emisor configurado o error estructurado."""
-    if emitter_cuit is None or not emitter_cuit.strip():
-        return ArcaError(
-            cause=ArcaErrorCause.MISSING_CONFIG,
-            message=(
-                "ARCA_CUIT no está configurado. "
-                "Las consultas autenticadas a ARCA requieren cuitRepresentada/Cuit."
-            ),
-        )
-    cuit = emitter_cuit.strip()
-    if not cuit.isdigit():
-        return ArcaError(
-            cause=ArcaErrorCause.MISSING_CONFIG,
-            message=f"ARCA_CUIT debe contener solo dígitos: {emitter_cuit!r}",
-        )
-    return cuit
-
 
 @server.tool
 async def generate_qr(
@@ -351,13 +304,18 @@ async def get_last_voucher_number(punto_venta: int, cbte_tipo: int) -> dict:
         return token_result.model_dump()
 
     token, sign = token_result
-    result = wsfe_client.fecomp_ultimo_autorizado(
-        token=token,
-        sign=sign,
-        environment=config.environment,
-        cuit=emitter_cuit,
-        punto_venta=punto_venta,
-        cbte_tipo=cbte_tipo,
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(
+        None,
+        functools.partial(
+            wsfe_client.fecomp_ultimo_autorizado,
+            token=token,
+            sign=sign,
+            environment=config.environment,
+            cuit=emitter_cuit,
+            punto_venta=punto_venta,
+            cbte_tipo=cbte_tipo,
+        ),
     )
     if isinstance(result, ArcaError):
         return result.model_dump()
@@ -399,11 +357,16 @@ async def get_voucher_info(punto_venta: int, cbte_tipo: int, cbte_nro: int) -> d
         cbte_tipo=cbte_tipo,
         cbte_nro=cbte_nro,
     )
-    result = wsfe_client.fecomp_consultar(
-        token=token,
-        sign=sign,
-        environment=config.environment,
-        request=request,
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(
+        None,
+        functools.partial(
+            wsfe_client.fecomp_consultar,
+            token=token,
+            sign=sign,
+            environment=config.environment,
+            request=request,
+        ),
     )
     if isinstance(result, ArcaError):
         return result.model_dump()
@@ -518,11 +481,16 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
         imp_total=draft.imp_total,
         alicuota_id=draft.alicuota_id,
     )
-    wsfe_result = wsfe_client.fecae_solicitar(
-        token=token,
-        sign=sign,
-        environment=config.environment,
-        request=fecae_request,
+    loop = asyncio.get_running_loop()
+    wsfe_result = await loop.run_in_executor(
+        None,
+        functools.partial(
+            wsfe_client.fecae_solicitar,
+            token=token,
+            sign=sign,
+            environment=config.environment,
+            request=fecae_request,
+        ),
     )
     if isinstance(wsfe_result, ArcaError):
         await _idempotency_store.delete(idempotency_key)

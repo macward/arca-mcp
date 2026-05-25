@@ -2,73 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
+import functools
 from collections.abc import Callable
 
 import fastmcp
 
 from arca_mcp.config import resolve_runtime_config
-from arca_mcp.errors import ArcaError, ArcaErrorCause
+from arca_mcp.errors import ArcaError
+from arca_mcp.mcp._auth import get_wsaa_token as _get_wsaa_token
+from arca_mcp.mcp._auth import require_emitter_cuit as _require_emitter_cuit
 from arca_mcp.padron import client as padron_client
 from arca_mcp.padron.models import PersonaDetails, TaxpayerStatus
 from arca_mcp.validation import catalogs
-from arca_mcp.wsaa import WsaaEnvironment, validate_wsaa_login
-from arca_mcp.wsaa.models import SetupCheckResult
 from arca_mcp.wsfe import client as wsfe_client
 from arca_mcp.wsfe.models import CatalogItem
 
 server = fastmcp.FastMCP("lookup")
-
-
-_ENV_MAP = {
-    "homologacion": WsaaEnvironment.HOMOLOGACION,
-    "produccion": WsaaEnvironment.PRODUCCION,
-}
-
-
-async def _get_wsaa_token(
-    cert_path,
-    key_path,
-    environment: str,
-    service: str,
-    cuit: str | None = None,
-) -> tuple[str, str] | ArcaError:
-    """Obtiene token y sign de WSAA para el servicio indicado.
-
-    Retorna (token, sign) si el login es exitoso, o ArcaError si falla.
-    """
-    wsaa_env = _ENV_MAP.get(environment, WsaaEnvironment.HOMOLOGACION)
-    result: SetupCheckResult = await validate_wsaa_login(
-        cert_path,
-        key_path,
-        service=service,
-        environment=wsaa_env,
-        cuit=cuit,
-    )
-    if not result.ok or result.token is None:
-        return ArcaError(
-            cause=ArcaErrorCause.WSAA_AUTH_FAILED,
-            message=result.message or "WSAA login falló sin mensaje de error.",
-        )
-    return result.token.token, result.token.sign
-
-
-def _require_emitter_cuit(emitter_cuit: str | None) -> str | ArcaError:
-    """Retorna CUIT emisor configurado o error estructurado."""
-    if emitter_cuit is None or not emitter_cuit.strip():
-        return ArcaError(
-            cause=ArcaErrorCause.MISSING_CONFIG,
-            message=(
-                "ARCA_CUIT no está configurado. "
-                "Las consultas autenticadas a ARCA requieren cuitRepresentada/Cuit."
-            ),
-        )
-    cuit = emitter_cuit.strip()
-    if not cuit.isdigit():
-        return ArcaError(
-            cause=ArcaErrorCause.MISSING_CONFIG,
-            message=f"ARCA_CUIT debe contener solo dígitos: {emitter_cuit!r}",
-        )
-    return cuit
 
 
 async def _call_wsfe_catalog(wsfe_fn: Callable) -> list[CatalogItem] | ArcaError:
@@ -85,7 +35,10 @@ async def _call_wsfe_catalog(wsfe_fn: Callable) -> list[CatalogItem] | ArcaError
     if isinstance(token_result, ArcaError):
         return token_result
     token, sign = token_result
-    return wsfe_fn(token, sign, config.environment, emitter_cuit)
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None, functools.partial(wsfe_fn, token, sign, config.environment, emitter_cuit)
+    )
 
 
 @server.tool
@@ -165,12 +118,17 @@ async def get_taxpayer_details(cuit: str) -> PersonaDetails | ArcaError:
     if isinstance(token_result, ArcaError):
         return token_result
     token, sign = token_result
-    return padron_client.get_persona(
-        token=token,
-        sign=sign,
-        emitter_cuit=emitter_cuit,
-        query_cuit=cuit,
-        environment=config.environment,
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None,
+        functools.partial(
+            padron_client.get_persona,
+            token=token,
+            sign=sign,
+            emitter_cuit=emitter_cuit,
+            query_cuit=cuit,
+            environment=config.environment,
+        ),
     )
 
 
@@ -196,12 +154,17 @@ async def validate_taxpayer_status(cuit: str) -> TaxpayerStatus | ArcaError:
     if isinstance(token_result, ArcaError):
         return token_result
     token, sign = token_result
-    persona_result = padron_client.get_persona(
-        token=token,
-        sign=sign,
-        emitter_cuit=emitter_cuit,
-        query_cuit=cuit,
-        environment=config.environment,
+    loop = asyncio.get_running_loop()
+    persona_result = await loop.run_in_executor(
+        None,
+        functools.partial(
+            padron_client.get_persona,
+            token=token,
+            sign=sign,
+            emitter_cuit=emitter_cuit,
+            query_cuit=cuit,
+            environment=config.environment,
+        ),
     )
     if isinstance(persona_result, ArcaError):
         return persona_result

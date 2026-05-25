@@ -136,8 +136,8 @@ async def test_login_generic_soap_fault(cert_key_pair, mocker):
 
 
 @pytest.mark.asyncio
-async def test_login_ta_already_valid_is_success(cert_key_pair, mocker):
-    """WSAA rechaza re-emitir TA mientras uno está vivo. Semánticamente es éxito."""
+async def test_login_ta_already_valid_returns_error_cause(cert_key_pair, mocker):
+    """WSAA rechaza re-emitir TA mientras uno está vivo → ok=False, causa dedicada."""
     cert_path, key_path = cert_key_pair
     mocker.patch(
         "arca_mcp.wsaa.login.call_login_cms",
@@ -147,9 +147,11 @@ async def test_login_ta_already_valid_is_success(cert_key_pair, mocker):
     )
 
     result = await validate_wsaa_login(cert_path, key_path, service="wsfe")
-    assert result.ok is True
-    assert result.token is None  # no se re-emitió, no hay token nuevo
-    assert "auth previa válida" in result.message
+    assert result.ok is False
+    assert result.cause is not None
+    assert result.cause.value == "WSAA_TA_ALREADY_VALID"
+    assert result.token is None
+    assert result.message is not None and "cuit" in result.message.lower()
 
 
 @pytest.mark.asyncio

@@ -4,10 +4,15 @@ Key: (cert_path, key_path, environment, service)
 Value: (token, sign, expiration_time)
 
 A token is considered valid if its expiration_time is more than 5 minutes in the future.
+Thread-safe: all operations hold _LOCK so that put_token from executor threads
+and get_token/clear_store from the asyncio thread cannot race.
 """
 
 import datetime
+import threading
 from typing import Optional
+
+_LOCK = threading.Lock()
 
 # Module-level store: no singletons, just a plain dict.
 _STORE: dict[
@@ -39,19 +44,20 @@ def get_token(
     Expired entries are removed from the store on access.
     """
     key = (cert_path, key_path, environment, service)
-    entry = _STORE.get(key)
-    if entry is None:
+    with _LOCK:
+        entry = _STORE.get(key)
+        if entry is None:
+            return None
+
+        token, sign, expiration_time = entry
+        expiration_time = _to_aware_utc(expiration_time)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if expiration_time > now + _VALIDITY_BUFFER:
+            return token, sign
+
+        # Token is expired or about to expire — evict it.
+        del _STORE[key]
         return None
-
-    token, sign, expiration_time = entry
-    expiration_time = _to_aware_utc(expiration_time)
-    now = datetime.datetime.now(datetime.timezone.utc)
-    if expiration_time > now + _VALIDITY_BUFFER:
-        return token, sign
-
-    # Token is expired or about to expire — evict it.
-    del _STORE[key]
-    return None
 
 
 def put_token(
@@ -65,9 +71,11 @@ def put_token(
 ) -> None:
     """Store a token under the given key."""
     key = (cert_path, key_path, environment, service)
-    _STORE[key] = (token, sign, _to_aware_utc(expiration_time))
+    with _LOCK:
+        _STORE[key] = (token, sign, _to_aware_utc(expiration_time))
 
 
 def clear_store() -> None:
     """Remove all entries from the in-memory store."""
-    _STORE.clear()
+    with _LOCK:
+        _STORE.clear()

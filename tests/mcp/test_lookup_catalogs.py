@@ -140,7 +140,7 @@ class TestWsaaLoginErrorPropagation:
         settings = _stub_settings(tmp_path)
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_failed_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_failed_wsaa_result())),
         ):
             result = await get_voucher_types()
         assert isinstance(result, ArcaError)
@@ -151,7 +151,7 @@ class TestWsaaLoginErrorPropagation:
         settings = _stub_settings(tmp_path)
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_failed_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_failed_wsaa_result())),
         ):
             result = await get_document_types()
         assert isinstance(result, ArcaError)
@@ -176,7 +176,7 @@ class TestWsfeClientErrorPropagation:
         settings = _stub_settings(tmp_path)
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_voucher_types", return_value=self._wsfe_error()),
         ):
             result = await get_voucher_types()
@@ -188,7 +188,7 @@ class TestWsfeClientErrorPropagation:
         settings = _stub_settings(tmp_path)
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_currency_types", return_value=self._wsfe_error()),
         ):
             result = await get_currency_types()
@@ -209,7 +209,7 @@ class TestHappyPath:
         items = _catalog_items()
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_voucher_types", return_value=items),
         ):
             result = await get_voucher_types()
@@ -223,7 +223,7 @@ class TestHappyPath:
         items = _catalog_items()
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_document_types", return_value=items),
         ):
             result = await get_document_types()
@@ -236,7 +236,7 @@ class TestHappyPath:
         items = _catalog_items()
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_tax_types", return_value=items),
         ):
             result = await get_tax_types()
@@ -249,7 +249,7 @@ class TestHappyPath:
         items = _catalog_items()
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_aliquot_types", return_value=items),
         ):
             result = await get_aliquot_types()
@@ -262,7 +262,7 @@ class TestHappyPath:
         items = _catalog_items()
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_currency_types", return_value=items),
         ):
             result = await get_currency_types()
@@ -284,7 +284,7 @@ class TestHappyPath:
 
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_voucher_types", side_effect=fake_get_voucher_types),
         ):
             await get_voucher_types()
@@ -300,7 +300,7 @@ class TestHappyPath:
         settings = _stub_settings(tmp_path)
         with (
             patch("arca_mcp.config.get_server_settings", return_value=settings),
-            patch("arca_mcp.mcp.lookup.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
+            patch("arca_mcp.mcp._auth.validate_wsaa_login", new=AsyncMock(return_value=_ok_wsaa_result())),
             patch("arca_mcp.mcp.lookup.wsfe_client.get_voucher_types", return_value=[]),
         ):
             result = await get_voucher_types()

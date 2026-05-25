@@ -251,7 +251,7 @@ def fecae_solicitar(
     fe_det_req = {
         "Concepto": request.concepto,
         "DocTipo": request.doc_tipo,
-        "DocNro": int(request.cuit_receptor),
+        "DocNro": 0 if request.doc_tipo == 99 else int(request.cuit_receptor),
         "CbteDesde": 0,  # WSFE asigna el número
         "CbteHasta": 0,
         "CbteFch": request.fecha_cbte,

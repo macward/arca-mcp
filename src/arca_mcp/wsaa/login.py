@@ -78,16 +78,12 @@ async def validate_wsaa_login(
 
         response_xml = call_login_cms(cms, endpoint=environment.value, on_retry=_on_retry)
         token, sign, gen, exp = parse_login_ticket_response(response_xml)
-        wsaa_token = WsaaToken(token=token, sign=sign, generation_time=gen, expiration_time=exp)
-        token_store.put_token(
-            str(cert_path), str(key_path), str(environment), str(service), token, sign, exp
-        )
-        return wsaa_token
+        return WsaaToken(token=token, sign=sign, generation_time=gen, expiration_time=exp)
 
     fs_cache = (cache if cache is not None else _shared_cache) if cuit is not None else None
 
     try:
-        if fs_cache is not None:
+        if fs_cache is not None and cuit is not None:
             wsaa_token = await fs_cache.get_or_refresh(cuit, _do_network_login)
         else:
             wsaa_token = _do_network_login()
@@ -117,11 +113,11 @@ async def validate_wsaa_login(
         if "ya posee un ta valido" in msg_lower or "ya posee un ta válido" in msg_lower:
             _log(WsaaCallResult.CACHED)
             return SetupCheckResult(
-                ok=True,
+                ok=False,
+                cause=ArcaErrorCause.WSAA_TA_ALREADY_VALID,
                 message=(
-                    f"WSAA confirma auth previa válida para {service!r} "
-                    "(no se re-emite token mientras el TA anterior siga vivo). "
-                    "Proveer el parámetro `cuit` para usar el caché filesystem."
+                    f"WSAA ya tiene un TA válido para {service!r}. "
+                    "Proveer el parámetro `cuit` para recuperar el token desde el caché filesystem."
                 ),
             )
         cause = ArcaErrorCause.WSAA_AUTH_FAILED
@@ -137,13 +133,12 @@ async def validate_wsaa_login(
             message=str(e),
         )
 
-    # Warm in-memory cache if get_or_refresh returned a cached-from-disk token
-    if fs_cache is not None:
-        if token_store.get_token(str(cert_path), str(key_path), str(environment), str(service)) is None:
-            token_store.put_token(
-                str(cert_path), str(key_path), str(environment), str(service),
-                wsaa_token.token, wsaa_token.sign, wsaa_token.expiration_time,
-            )
+    # Warm in-memory cache (both direct-login and disk-cache paths)
+    if token_store.get_token(str(cert_path), str(key_path), str(environment), str(service)) is None:
+        token_store.put_token(
+            str(cert_path), str(key_path), str(environment), str(service),
+            wsaa_token.token, wsaa_token.sign, wsaa_token.expiration_time,
+        )
 
     if not _network_called:
         _log(WsaaCallResult.CACHED)
