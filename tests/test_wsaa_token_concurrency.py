@@ -1,4 +1,4 @@
-"""Concurrency tests for TokenCache.get_or_refresh() and validate_wsaa_login()."""
+"""Concurrency tests for WsaaCache.get_or_refresh() and validate_wsaa_login()."""
 
 import asyncio
 import datetime
@@ -10,10 +10,11 @@ import pytest
 from arca_mcp.wsaa import token_store
 from arca_mcp.wsaa.login import validate_wsaa_login
 from arca_mcp.wsaa.models import WsaaToken
-from arca_mcp.wsaa.token_cache import TokenCache
+from arca_mcp.wsaa.wsaa_cache import WsaaCache
 
 CUIT_A = "20111111111"
 CUIT_B = "20222222222"
+SVC = "wsfe"
 
 
 def _make_token(minutes_valid: int = 60) -> WsaaToken:
@@ -27,17 +28,17 @@ def _make_token(minutes_valid: int = 60) -> WsaaToken:
 
 
 @pytest.fixture
-def cache(tmp_path: Path) -> TokenCache:
-    return TokenCache(cache_dir=tmp_path / "tokens")
+def cache(tmp_path: Path) -> WsaaCache:
+    return WsaaCache(cache_dir=tmp_path / "tokens")
 
 
 @pytest.mark.asyncio
-async def test_concurrent_sessions_trigger_single_login(cache: TokenCache):
+async def test_concurrent_sessions_trigger_single_login(cache: WsaaCache):
     """10 concurrent coroutines should produce exactly 1 login call."""
     refresh_mock = MagicMock(return_value=_make_token())
 
     results = await asyncio.gather(
-        *[cache.get_or_refresh(CUIT_A, refresh_mock) for _ in range(10)]
+        *[cache.get_or_refresh(CUIT_A, SVC, refresh_mock) for _ in range(10)]
     )
 
     assert refresh_mock.call_count == 1
@@ -45,7 +46,7 @@ async def test_concurrent_sessions_trigger_single_login(cache: TokenCache):
 
 
 @pytest.mark.asyncio
-async def test_independent_locks_per_cuit(cache: TokenCache):
+async def test_independent_locks_per_cuit(cache: WsaaCache):
     """Two different CUITs use independent locks — no mutual blocking."""
     calls: dict[str, int] = {CUIT_A: 0, CUIT_B: 0}
 
@@ -58,42 +59,33 @@ async def test_independent_locks_per_cuit(cache: TokenCache):
         return _make_token()
 
     results = await asyncio.gather(
-        *[cache.get_or_refresh(CUIT_A, refresh_a) for _ in range(5)],
-        *[cache.get_or_refresh(CUIT_B, refresh_b) for _ in range(5)],
+        *[cache.get_or_refresh(CUIT_A, SVC, refresh_a) for _ in range(5)],
+        *[cache.get_or_refresh(CUIT_B, SVC, refresh_b) for _ in range(5)],
     )
 
     assert calls[CUIT_A] == 1
     assert calls[CUIT_B] == 1
     assert len(results) == 10
     # Locks for A and B must be distinct objects
-    assert cache._get_lock(CUIT_A) is not cache._get_lock(CUIT_B)
+    assert cache._get_fs_lock(CUIT_A) is not cache._get_fs_lock(CUIT_B)
 
 
 @pytest.mark.asyncio
-async def test_cache_hit_bypasses_refresh(cache: TokenCache):
+async def test_cache_hit_bypasses_refresh(cache: WsaaCache):
     """If token is already in cache, refresh_fn is never called."""
     cache.save(CUIT_A, _make_token())
     refresh_mock = MagicMock(return_value=_make_token())
 
-    result = await cache.get_or_refresh(CUIT_A, refresh_mock)
+    result = await cache.get_or_refresh(CUIT_A, SVC, refresh_mock)
 
     refresh_mock.assert_not_called()
     assert result.token == "tok"
 
 
 @pytest.mark.asyncio
-async def test_second_waiter_uses_cached_result(cache: TokenCache):
+async def test_second_waiter_uses_cached_result(cache: WsaaCache):
     """After the first coroutine refreshes, the second must use the cached result."""
     call_count = 0
-
-    async def slow_refresh_wrapper():
-        nonlocal call_count
-        await asyncio.sleep(0)  # yield to let other coroutines start
-
-        async def do_refresh():
-            return await cache.get_or_refresh(CUIT_A, _do_login)
-
-        return await do_refresh()
 
     def _do_login() -> WsaaToken:
         nonlocal call_count
@@ -101,9 +93,9 @@ async def test_second_waiter_uses_cached_result(cache: TokenCache):
         return _make_token()
 
     results = await asyncio.gather(
-        cache.get_or_refresh(CUIT_A, _do_login),
-        cache.get_or_refresh(CUIT_A, _do_login),
-        cache.get_or_refresh(CUIT_A, _do_login),
+        cache.get_or_refresh(CUIT_A, SVC, _do_login),
+        cache.get_or_refresh(CUIT_A, SVC, _do_login),
+        cache.get_or_refresh(CUIT_A, SVC, _do_login),
     )
 
     assert call_count == 1
@@ -145,7 +137,7 @@ async def test_validate_wsaa_login_concurrent_single_network_call(
         "arca_mcp.wsaa.login.call_login_cms",
         return_value=SUCCESS_RESPONSE,
     )
-    fs_cache = TokenCache(cache_dir=tmp_path / "tokens")
+    fs_cache = WsaaCache(cache_dir=tmp_path / "tokens")
 
     results = await asyncio.gather(
         *[
@@ -160,16 +152,16 @@ async def test_validate_wsaa_login_concurrent_single_network_call(
 
 
 @pytest.mark.asyncio
-async def test_lock_released_after_refresh_fn_raises(cache: TokenCache):
+async def test_lock_released_after_refresh_fn_raises(cache: WsaaCache):
     """If refresh_fn raises, the lock is released so subsequent callers can retry."""
 
     def _failing_login() -> WsaaToken:
         raise ValueError("WSAA unreachable")
 
     with pytest.raises(ValueError, match="WSAA unreachable"):
-        await cache.get_or_refresh(CUIT_A, _failing_login)
+        await cache.get_or_refresh(CUIT_A, SVC, _failing_login)
 
-    assert not cache._get_lock(CUIT_A).locked()
+    assert not cache._get_fs_lock(CUIT_A).locked()
 
-    result = await cache.get_or_refresh(CUIT_A, lambda: _make_token())
+    result = await cache.get_or_refresh(CUIT_A, SVC, lambda: _make_token())
     assert result.token == "tok"

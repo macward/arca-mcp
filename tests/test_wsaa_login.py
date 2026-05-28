@@ -1,5 +1,4 @@
 import datetime
-from pathlib import Path
 
 import httpx
 import pytest
@@ -8,7 +7,7 @@ from arca_mcp.errors import ArcaErrorCause
 from arca_mcp.wsaa import token_store
 from arca_mcp.wsaa.login import validate_wsaa_login
 from arca_mcp.wsaa.models import WsaaToken
-from arca_mcp.wsaa.token_cache import TokenCache
+from arca_mcp.wsaa.wsaa_cache import WsaaCache
 
 SUCCESS_RESPONSE = """<?xml version="1.0"?>
 <loginTicketResponse>
@@ -166,7 +165,7 @@ async def test_filesystem_cache_expired_token_triggers_relogin(cert_key_pair, mo
         generation_time="2020-01-01T00:00:00+00:00",
         expiration_time="2020-01-01T12:00:00+00:00",
     )
-    fs_cache = TokenCache(cache_dir=tmp_path / "tokens")
+    fs_cache = WsaaCache(cache_dir=tmp_path / "tokens")
     fs_cache.save(cuit, expired_token)
 
     call_login = mocker.patch(
@@ -193,7 +192,7 @@ async def test_filesystem_cache_near_expiry_triggers_relogin(cert_key_pair, mock
     cuit = "20123456789"
     now = datetime.datetime.now(datetime.timezone.utc)
 
-    fs_cache = TokenCache(
+    fs_cache = WsaaCache(
         cache_dir=tmp_path / "tokens",
         _now=lambda: now,
     )
@@ -213,5 +212,53 @@ async def test_filesystem_cache_near_expiry_triggers_relogin(cert_key_pair, mock
     result = await validate_wsaa_login(cert_path, key_path, cuit=cuit, cache=fs_cache)
 
     assert result.ok is True
+    assert result.token is not None
     assert result.token.token == "TOKEN123"
     assert call_login.call_count == 1
+
+
+# --- Guard: empty token or sign must return ok=False ---
+
+@pytest.mark.asyncio
+async def test_empty_token_returns_ok_false(cert_key_pair, mocker):
+    """parse_login_ticket_response retorna token vacío → ok=False, no falso positivo."""
+    cert_path, key_path = cert_key_pair
+    mocker.patch("arca_mcp.wsaa.login.call_login_cms", return_value="<irrelevant/>")
+    mocker.patch(
+        "arca_mcp.wsaa.login.parse_login_ticket_response",
+        return_value=("", "SIGN456", "2026-01-01T00:00:00+00:00", "2099-01-01T00:00:00+00:00"),
+    )
+
+    result = await validate_wsaa_login(cert_path, key_path)
+    assert result.ok is False
+    assert result.token is None
+    assert result.cause == ArcaErrorCause.WSAA_AUTH_FAILED
+
+
+@pytest.mark.asyncio
+async def test_empty_sign_returns_ok_false(cert_key_pair, mocker):
+    """parse_login_ticket_response retorna firma vacía → ok=False, no falso positivo."""
+    cert_path, key_path = cert_key_pair
+    mocker.patch("arca_mcp.wsaa.login.call_login_cms", return_value="<irrelevant/>")
+    mocker.patch(
+        "arca_mcp.wsaa.login.parse_login_ticket_response",
+        return_value=("TOKEN123", "", "2026-01-01T00:00:00+00:00", "2099-01-01T00:00:00+00:00"),
+    )
+
+    result = await validate_wsaa_login(cert_path, key_path)
+    assert result.ok is False
+    assert result.token is None
+    assert result.cause == ArcaErrorCause.WSAA_AUTH_FAILED
+
+
+@pytest.mark.asyncio
+async def test_valid_token_and_sign_returns_ok_true(cert_key_pair, mocker):
+    """Token y firma presentes y no vacíos → ok=True."""
+    cert_path, key_path = cert_key_pair
+    mocker.patch("arca_mcp.wsaa.login.call_login_cms", return_value=SUCCESS_RESPONSE)
+
+    result = await validate_wsaa_login(cert_path, key_path)
+    assert result.ok is True
+    assert result.token is not None
+    assert result.token.token == "TOKEN123"
+    assert result.token.sign == "SIGN456"

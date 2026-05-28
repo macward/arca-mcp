@@ -1,9 +1,9 @@
+import asyncio
 import time
 from pathlib import Path
 
 import httpx
 
-import arca_mcp.wsaa.token_store as token_store
 from arca_mcp.certificates.errors import CertificateLoadError, PrivateKeyLoadError
 from arca_mcp.errors import ArcaErrorCause
 from arca_mcp.wsaa.client import (
@@ -13,12 +13,12 @@ from arca_mcp.wsaa.client import (
 )
 from arca_mcp.wsaa.models import SetupCheckResult, WsaaToken
 from arca_mcp.wsaa.signing import sign_tra
-from arca_mcp.wsaa.token_cache import TokenCache
 from arca_mcp.wsaa.tra import build_tra
+from arca_mcp.wsaa.wsaa_cache import WsaaCache
 from arca_mcp.wsaa.wsaa_logger import WsaaCallResult, log_wsaa_call
 
 # Eagerly initialized at module load — one instance per process, no per-request I/O.
-_shared_cache: TokenCache = TokenCache()
+_shared_cache: WsaaCache = WsaaCache()
 
 
 async def validate_wsaa_login(
@@ -28,7 +28,7 @@ async def validate_wsaa_login(
     environment: WsaaEnvironment = WsaaEnvironment.HOMOLOGACION,
     cuit: str | None = None,
     *,
-    cache: TokenCache | None = None,
+    cache: WsaaCache | None = None,
 ) -> SetupCheckResult:
     """Ejecuta el flujo completo de login WSAA y retorna el resultado.
 
@@ -37,10 +37,11 @@ async def validate_wsaa_login(
     - Lo envía a WSAA homologación o producción
     - Parsea la respuesta y retorna el token + sign
 
-    Si `cuit` se provee, se consulta el caché filesystem antes del login de red
-    y se persiste el token obtenido. El asyncio.Lock en TokenCache previene
-    doble-login cuando múltiples requests concurrentes (streamable-http) tocan
-    el mismo CUIT simultáneamente.
+    Si `cuit` se provee, se consulta el caché (in-memory → filesystem) antes del
+    login de red y se persiste el token obtenido. WsaaCache usa threading.Lock
+    para la capa in-memory y asyncio.Lock por CUIT para la capa filesystem,
+    previniendo doble-login cuando múltiples requests concurrentes tocan el mismo
+    CUIT simultáneamente.
 
     Si algún paso falla, retorna SetupCheckResult.ok=False con la causa.
     """
@@ -53,26 +54,32 @@ async def validate_wsaa_login(
         latency_ms = int((time.monotonic() - _start) * 1000)
         log_wsaa_call(_cuit, service, latency_ms, result, error_cause)
 
+    _active_cache: WsaaCache = cache if cache is not None else _shared_cache
+
+    # Derive a stable cache key even when no CUIT is provided.
+    # For CUIT-aware callers the key is (cuit, service).
+    # For anonymous callers we fall back to a composite key from cert+key+env.
+    _mem_cuit = cuit if cuit is not None else f"{cert_path}:{key_path}:{environment}"
+
     # In-memory fast path — no I/O
-    cached = token_store.get_token(str(cert_path), str(key_path), str(environment), str(service))
-    if cached is not None:
-        token, sign = cached
+    cached_token = _active_cache.get(_mem_cuit, service)
+    if cached_token is not None:
         _log(WsaaCallResult.CACHED)
         return SetupCheckResult(
             ok=True,
             message=f"Token WSAA cacheado para servicio {service!r}.",
-            token=WsaaToken(token=token, sign=sign, generation_time="cached", expiration_time="cached"),
+            token=cached_token,
         )
 
     def _do_network_login() -> WsaaToken:
-        """TRA build → CMS sign → WSAA HTTP → parse → warm in-memory cache."""
+        """TRA build → CMS sign → WSAA HTTP → parse."""
         nonlocal _was_retried, _network_called
         _network_called = True
 
         tra = build_tra(service)
         cms = sign_tra(tra, cert_path, key_path)
 
-        def _on_retry(_attempt: int) -> None:
+        def _on_retry(_: int) -> None:
             nonlocal _was_retried
             _was_retried = True
 
@@ -80,13 +87,13 @@ async def validate_wsaa_login(
         token, sign, gen, exp = parse_login_ticket_response(response_xml)
         return WsaaToken(token=token, sign=sign, generation_time=gen, expiration_time=exp)
 
-    fs_cache = (cache if cache is not None else _shared_cache) if cuit is not None else None
-
     try:
-        if fs_cache is not None and cuit is not None:
-            wsaa_token = await fs_cache.get_or_refresh(cuit, _do_network_login)
+        if cuit is not None:
+            # Full path: in-memory check-lock-check + filesystem persistence
+            wsaa_token = await _active_cache.get_or_refresh(cuit, service, _do_network_login)
         else:
-            wsaa_token = _do_network_login()
+            # Anonymous path: network login + warm in-memory only (no filesystem)
+            wsaa_token = await asyncio.to_thread(_do_network_login)
     except CertificateLoadError as e:
         _log(WsaaCallResult.FAILED, error_cause=f"cert_invalid: {e}")
         return SetupCheckResult(ok=False, cause=ArcaErrorCause.CERT_INVALID, message=str(e))
@@ -133,12 +140,17 @@ async def validate_wsaa_login(
             message=str(e),
         )
 
-    # Warm in-memory cache (both direct-login and disk-cache paths)
-    if token_store.get_token(str(cert_path), str(key_path), str(environment), str(service)) is None:
-        token_store.put_token(
-            str(cert_path), str(key_path), str(environment), str(service),
-            wsaa_token.token, wsaa_token.sign, wsaa_token.expiration_time,
+    if not wsaa_token.token or not wsaa_token.sign:
+        _log(WsaaCallResult.FAILED, error_cause="empty_token_or_sign")
+        return SetupCheckResult(
+            ok=False,
+            cause=ArcaErrorCause.WSAA_AUTH_FAILED,
+            message="WSAA retornó un token o firma vacíos.",
         )
+
+    # Warm in-memory cache for anonymous callers (cuit-aware path already warmed it via get_or_refresh)
+    if _network_called:
+        _active_cache.set(_mem_cuit, service, wsaa_token)
 
     if not _network_called:
         _log(WsaaCallResult.CACHED)
