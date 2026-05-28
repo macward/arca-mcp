@@ -3,6 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
@@ -19,10 +20,10 @@ from arca_mcp.invoicing.models import DraftStatus, VoucherDraft
 # ---------------------------------------------------------------------------
 
 
-def make_draft(**overrides) -> VoucherDraft:
+def make_draft(**overrides: Any) -> VoucherDraft:
     """Return a minimal valid VoucherDraft, with optional field overrides."""
     now = datetime.now(timezone.utc)
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         draft_id=str(uuid.uuid4()),
         status=DraftStatus.PENDING,
         cbte_tipo=1,
@@ -82,7 +83,7 @@ class TestVoucherDraftModel:
 class TestDraftStoreCreate:
     @pytest.mark.asyncio
     async def test_create_and_retrieve(self):
-        store = DraftStore()
+        store = DraftStore(db_path=":memory:")
         draft = make_draft()
         created = await store.create(draft)
         assert created.draft_id == draft.draft_id
@@ -92,7 +93,7 @@ class TestDraftStoreCreate:
 
     @pytest.mark.asyncio
     async def test_create_duplicate_raises(self):
-        store = DraftStore()
+        store = DraftStore(db_path=":memory:")
         draft = make_draft()
         await store.create(draft)
         with pytest.raises(ValueError, match="already exists"):
@@ -100,7 +101,7 @@ class TestDraftStoreCreate:
 
     @pytest.mark.asyncio
     async def test_get_nonexistent_returns_none(self):
-        store = DraftStore()
+        store = DraftStore(db_path=":memory:")
         result = await store.get("nonexistent-id")
         assert result is None
 
@@ -108,7 +109,7 @@ class TestDraftStoreCreate:
 class TestDraftStoreUpdateStatus:
     @pytest.mark.asyncio
     async def test_pending_to_validated(self):
-        store = DraftStore()
+        store = DraftStore(db_path=":memory:")
         draft = make_draft()
         await store.create(draft)
         updated = await store.update_status(draft.draft_id, DraftStatus.VALIDATED)
@@ -116,7 +117,7 @@ class TestDraftStoreUpdateStatus:
 
     @pytest.mark.asyncio
     async def test_pending_to_rejected(self):
-        store = DraftStore()
+        store = DraftStore(db_path=":memory:")
         draft = make_draft()
         await store.create(draft)
         updated = await store.update_status(draft.draft_id, DraftStatus.REJECTED)
@@ -124,7 +125,7 @@ class TestDraftStoreUpdateStatus:
 
     @pytest.mark.asyncio
     async def test_validated_to_confirmed(self):
-        store = DraftStore()
+        store = DraftStore(db_path=":memory:")
         draft = make_draft()
         await store.create(draft)
         await store.update_status(draft.draft_id, DraftStatus.VALIDATED)
@@ -133,7 +134,7 @@ class TestDraftStoreUpdateStatus:
 
     @pytest.mark.asyncio
     async def test_confirmed_is_terminal(self):
-        store = DraftStore()
+        store = DraftStore(db_path=":memory:")
         draft = make_draft()
         await store.create(draft)
         await store.update_status(draft.draft_id, DraftStatus.VALIDATED)
@@ -143,7 +144,7 @@ class TestDraftStoreUpdateStatus:
 
     @pytest.mark.asyncio
     async def test_rejected_is_terminal(self):
-        store = DraftStore()
+        store = DraftStore(db_path=":memory:")
         draft = make_draft()
         await store.create(draft)
         await store.update_status(draft.draft_id, DraftStatus.REJECTED)
@@ -152,7 +153,7 @@ class TestDraftStoreUpdateStatus:
 
     @pytest.mark.asyncio
     async def test_invalid_transition_pending_to_confirmed(self):
-        store = DraftStore()
+        store = DraftStore(db_path=":memory:")
         draft = make_draft()
         await store.create(draft)
         with pytest.raises(InvalidStatusTransitionError) as exc_info:
@@ -162,13 +163,13 @@ class TestDraftStoreUpdateStatus:
 
     @pytest.mark.asyncio
     async def test_update_nonexistent_raises(self):
-        store = DraftStore()
+        store = DraftStore(db_path=":memory:")
         with pytest.raises(DraftNotFoundError):
             await store.update_status("ghost-id", DraftStatus.VALIDATED)
 
     @pytest.mark.asyncio
     async def test_update_sets_updated_at(self):
-        store = DraftStore()
+        store = DraftStore(db_path=":memory:")
         draft = make_draft()
         await store.create(draft)
         original_updated_at = draft.updated_at
@@ -178,7 +179,7 @@ class TestDraftStoreUpdateStatus:
     @pytest.mark.asyncio
     async def test_updated_draft_is_persisted(self):
         """After update_status, get() returns the new status."""
-        store = DraftStore()
+        store = DraftStore(db_path=":memory:")
         draft = make_draft()
         await store.create(draft)
         await store.update_status(draft.draft_id, DraftStatus.VALIDATED)
@@ -190,7 +191,7 @@ class TestDraftStoreUpdateStatus:
 class TestDraftStoreIsolation:
     @pytest.mark.asyncio
     async def test_multiple_drafts_independent(self):
-        store = DraftStore()
+        store = DraftStore(db_path=":memory:")
         draft_a = make_draft()
         draft_b = make_draft()
         await store.create(draft_a)
@@ -202,7 +203,7 @@ class TestDraftStoreIsolation:
 
     @pytest.mark.asyncio
     async def test_clear_empties_store(self):
-        store = DraftStore()
+        store = DraftStore(db_path=":memory:")
         await store.create(make_draft())
         await store.create(make_draft())
         assert len(store) == 2

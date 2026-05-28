@@ -94,8 +94,10 @@ def _fake_ultimo_autorizado_response() -> FECompUltimoAutorizadoResponse:
 @pytest.fixture(autouse=True)
 def isolated_stores():
     """Replace module-level DraftStore and IdempotencyStore with fresh instances per test."""
-    fresh_draft_store = DraftStore()
-    fresh_idempotency_store = IdempotencyStore()
+    # Use in-memory SQLite so each test starts with a clean store and leaves no
+    # files on disk.
+    fresh_draft_store = DraftStore(db_path=":memory:")
+    fresh_idempotency_store = IdempotencyStore(db_path=":memory:")
     with (
         patch.object(_invoicing_mod, "_draft_store", fresh_draft_store),
         patch.object(_invoicing_mod, "_idempotency_store", fresh_idempotency_store),
@@ -206,7 +208,7 @@ class TestDoubleConfirmIdempotency:
         config = _stub_runtime_config(tmp_path)
         wsfe_call_count = {"n": 0}
 
-        def counting_fecae_solicitar(**kwargs):
+        def counting_fecae_solicitar(**_kwargs):
             wsfe_call_count["n"] += 1
             return _fake_cae_response()
 
@@ -354,3 +356,228 @@ class TestGetLastVoucherNumber:
         assert isinstance(result["cbte_nro"], int)
         assert result["cbte_nro"] >= 0
         assert result["cbte_nro"] == 5
+
+
+# ---------------------------------------------------------------------------
+# Scenario 6: WAL order — verify the exact sequence of persistence operations
+# ---------------------------------------------------------------------------
+
+
+class TestWALOrder:
+    """Verify the Write-Ahead Log operation order in confirm_voucher_creation.
+
+    Correct order:
+      1. IdempotencyStore.set_pending  (claim the key)
+      2. AuditLog PENDING_CAE          (log intent before WSFE)
+      3. wsfe_client.fecae_solicitar   (irreversible SOAP call)
+      4. IdempotencyStore.set_done     (persist result — BEFORE audit confirmation)
+      5. DraftStore.update_status      (mark draft CONFIRMED)
+      6. AuditLog CAE_CONFIRMED        (record success — last write)
+
+    A crash between steps 4 and 6 is safe because a retry will find the key
+    as DONE in the IdempotencyStore and return the cached result.
+    """
+
+    @pytest.mark.asyncio
+    async def test_wal_operation_order(self, tmp_path, isolated_stores):
+        config = _stub_runtime_config(tmp_path)
+        draft_store, idempotency_store = isolated_stores
+
+        call_order: list[str] = []
+
+        # Wrap IdempotencyStore methods to record call order
+        original_set_pending = idempotency_store.set_pending
+        original_set_done = idempotency_store.set_done
+
+        async def tracked_set_pending(key):
+            call_order.append("idempotency:set_pending")
+            return await original_set_pending(key)
+
+        async def tracked_set_done(key, result):
+            call_order.append("idempotency:set_done")
+            return await original_set_done(key, result)
+
+        # Wrap DraftStore.update_status
+        original_update_status = draft_store.update_status
+
+        async def tracked_update_status(draft_id, status):
+            call_order.append(f"draft_store:update_status:{status.value}")
+            return await original_update_status(draft_id, status)
+
+        # Wrap AuditLog.append to record which events are written
+        original_audit_append = _invoicing_mod._audit_log.append
+
+        async def tracked_audit_append(entry):
+            call_order.append(f"audit:{entry['event']}")
+            return await original_audit_append(entry)
+
+        def fake_fecae_solicitar(**_kwargs):
+            call_order.append("wsfe:fecae_solicitar")
+            return _fake_cae_response()
+
+        with (
+            patch("arca_mcp.mcp.invoicing.resolve_runtime_config", return_value=config),
+            patch(
+                "arca_mcp.mcp._auth.validate_wsaa_login",
+                new=AsyncMock(return_value=_ok_wsaa_result()),
+            ),
+            patch(
+                "arca_mcp.mcp.invoicing.wsfe_client.fecae_solicitar",
+                side_effect=fake_fecae_solicitar,
+            ),
+            patch.object(idempotency_store, "set_pending", side_effect=tracked_set_pending),
+            patch.object(idempotency_store, "set_done", side_effect=tracked_set_done),
+            patch.object(draft_store, "update_status", side_effect=tracked_update_status),
+            patch.object(_invoicing_mod._audit_log, "append", side_effect=tracked_audit_append),
+        ):
+            draft_result = await create_voucher_draft(
+                cbte_tipo=6,
+                punto_venta=1,
+                fecha_cbte="20260115",
+                cuit_receptor="20111111112",
+                doc_tipo=80,
+                imp_neto="1000.00",
+                alicuota_id="5",
+            )
+            draft_id = draft_result["draft_id"]
+            await validate_voucher_draft(draft_id=draft_id)
+
+            call_order.clear()  # Only track confirm_voucher_creation calls
+
+            result = await confirm_voucher_creation(
+                draft_id=draft_id,
+                idempotency_key="wal-order-test-key",
+            )
+
+        assert "cae" in result, f"Expected cae in result, got: {result}"
+
+        # Verify the exact WAL sequence
+        assert "idempotency:set_pending" in call_order, f"set_pending missing: {call_order}"
+        assert "audit:PENDING_CAE" in call_order, f"PENDING_CAE missing: {call_order}"
+        assert "wsfe:fecae_solicitar" in call_order, f"WSFE call missing: {call_order}"
+        assert "idempotency:set_done" in call_order, f"set_done missing: {call_order}"
+        assert "audit:CAE_CONFIRMED" in call_order, f"CAE_CONFIRMED missing: {call_order}"
+
+        pending_idx = call_order.index("idempotency:set_pending")
+        audit_pending_idx = call_order.index("audit:PENDING_CAE")
+        wsfe_idx = call_order.index("wsfe:fecae_solicitar")
+        set_done_idx = call_order.index("idempotency:set_done")
+        audit_confirmed_idx = call_order.index("audit:CAE_CONFIRMED")
+
+        assert pending_idx < audit_pending_idx, (
+            f"set_pending must come before PENDING_CAE. Order: {call_order}"
+        )
+        assert audit_pending_idx < wsfe_idx, (
+            f"PENDING_CAE must come before WSFE call. Order: {call_order}"
+        )
+        assert wsfe_idx < set_done_idx, (
+            f"WSFE call must come before set_done. Order: {call_order}"
+        )
+        assert set_done_idx < audit_confirmed_idx, (
+            f"set_done must come before CAE_CONFIRMED (WAL durability). Order: {call_order}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_wsfe_exception_deletes_idempotency_key(self, tmp_path, isolated_stores):
+        """If WSFE raises an unexpected exception, the idempotency key must be deleted.
+
+        This allows the caller to retry with the same key after fixing the error.
+        The key must NOT remain as PENDING after a transient WSFE failure.
+        """
+        config = _stub_runtime_config(tmp_path)
+        _, idempotency_store = isolated_stores
+
+        with (
+            patch("arca_mcp.mcp.invoicing.resolve_runtime_config", return_value=config),
+            patch(
+                "arca_mcp.mcp._auth.validate_wsaa_login",
+                new=AsyncMock(return_value=_ok_wsaa_result()),
+            ),
+            patch(
+                "arca_mcp.mcp.invoicing.wsfe_client.fecae_solicitar",
+                side_effect=Exception("SOAP connection timeout"),
+            ),
+        ):
+            draft_result = await create_voucher_draft(
+                cbte_tipo=6,
+                punto_venta=1,
+                fecha_cbte="20260115",
+                cuit_receptor="20111111112",
+                doc_tipo=80,
+                imp_neto="1000.00",
+                alicuota_id="5",
+            )
+            draft_id = draft_result["draft_id"]
+            await validate_voucher_draft(draft_id=draft_id)
+
+            idem_key = "wal-exception-test-key"
+
+            # The exception should propagate (it's unexpected) but the key
+            # must have been claimed and then deleted
+            try:
+                await confirm_voucher_creation(
+                    draft_id=draft_id,
+                    idempotency_key=idem_key,
+                )
+            except Exception:
+                pass  # Exception propagation is acceptable
+
+        # After the failure, the idempotency key must NOT be PENDING
+        entry = await idempotency_store.get(idem_key)
+        assert entry is None or entry[0] != "PENDING", (
+            f"Idempotency key must not remain PENDING after WSFE failure. Got: {entry}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_wsfe_arca_error_deletes_idempotency_key(self, tmp_path, isolated_stores):
+        """If WSFE returns an ArcaError, the idempotency key must be deleted for retry."""
+        from arca_mcp.errors import ArcaError, ArcaErrorCause
+
+        config = _stub_runtime_config(tmp_path)
+        _, idempotency_store = isolated_stores
+
+        wsfe_error = ArcaError(
+            cause=ArcaErrorCause.ARCA_SERVICE_ERROR,
+            message="Servicio WSFE no disponible",
+        )
+
+        with (
+            patch("arca_mcp.mcp.invoicing.resolve_runtime_config", return_value=config),
+            patch(
+                "arca_mcp.mcp._auth.validate_wsaa_login",
+                new=AsyncMock(return_value=_ok_wsaa_result()),
+            ),
+            patch(
+                "arca_mcp.mcp.invoicing.wsfe_client.fecae_solicitar",
+                return_value=wsfe_error,
+            ),
+        ):
+            draft_result = await create_voucher_draft(
+                cbte_tipo=6,
+                punto_venta=1,
+                fecha_cbte="20260115",
+                cuit_receptor="20111111112",
+                doc_tipo=80,
+                imp_neto="1000.00",
+                alicuota_id="5",
+            )
+            draft_id = draft_result["draft_id"]
+            await validate_voucher_draft(draft_id=draft_id)
+
+            idem_key = "wal-arcaerror-test-key"
+            result = await confirm_voucher_creation(
+                draft_id=draft_id,
+                idempotency_key=idem_key,
+            )
+
+        # wsfe_result is an ArcaError — model_dump() returns {"cause": ..., "message": ...}
+        # directly (not nested under "error" key)
+        assert "cause" in result or "error" in result, (
+            f"Expected error response, got: {result}"
+        )
+
+        # Key must be deleted — allowing retry
+        entry = await idempotency_store.get(idem_key)
+        assert entry is None, (
+            f"Idempotency key must be deleted after ArcaError from WSFE. Got: {entry}"
+        )

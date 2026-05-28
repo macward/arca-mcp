@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-28
+
+### Added
+- `WsaaCache` — clase unificada que reemplaza `token_store` + `TokenCache`; capa in-memory con `threading.Lock` y capa filesystem con `asyncio.Lock` por CUIT; escritura atómica con perms 0600 y refresh proactivo a <10min de expiración
+- `IdempotencyStore` ahora persiste en SQLite (`~/.arca-mcp/idempotency.db`): métodos `set_pending` / `set_done` / `get` / `delete` / `cleanup_stale_pending`; startup recovery elimina entradas PENDING > 5min
+- `DraftStore` ahora persiste en SQLite (`~/.arca-mcp/drafts.db`) con WAL mode y `threading.Lock`; los drafts sobreviven reinicios del proceso
+- `AuditLog`: escritura atómica (`{path}.tmp` → rename + `fsync`), perms 0600, directorio `~/.arca-mcp/audit/`; entrada `PENDING_CAE` escrita antes de llamar a WSFE
+
+### Fixed
+- `validate_wsaa_login` retornaba `ok=True` cuando el token o firma obtenidos eran strings vacíos — ahora retorna `ok=False` con causa `WSAA_AUTH_FAILED`
+- `_do_network_login` bloqueaba el event loop de asyncio — wrapeado con `asyncio.to_thread`
+- `confirm_voucher_creation`: orden WAL corregido a `set_pending → PENDING_CAE → fecae_solicitar → set_done → CAE_CONFIRMED`; errores transitorios de WSFE eliminan la key para permitir retry
+- `doc_tipo=99` (Consumidor Final): `cuit_receptor` acepta `"0"`, `DocNro=0` enviado a zeep, política fiscal omite validación de check-digit CUIT
+- `doc_tipo=96` (DNI): `cuit_receptor` acepta 7-8 dígitos; política fiscal omite validación de CUIT
+- `nroDocRec` en QR deriva correctamente del `tipoDocRec` (0 para CF, int para otros)
+- Floats enteros serializan sin decimales en JSON del QR (`1000.0` → `1000`)
+- `fecha_cbte` y `cae_fch_vto` rechazan fechas de calendario inválidas (ej. 30/02)
+- Heurística `"codAut" in msg` reemplazada por inspección explícita de `ValidationError.errors()`
+- Rama `ArcaError` en `build_qr_url` eliminada; tipo de retorno simplificado a `str`
+- `Decimal` pasado directamente a zeep en `fecae_solicitar` — elimina conversiones a `float` con pérdida de precisión
+
 ## [0.5.0] - 2026-05-22
 
 ### Added

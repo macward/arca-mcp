@@ -30,10 +30,14 @@ from arca_mcp.wsfe.models import FECAESolicitarRequest, FECompConsultarRequest
 server = fastmcp.FastMCP("invoicing")
 
 # Module-level singletons — same pattern as TokenCache in wsaa.
-_draft_store = DraftStore()
-_idempotency_store = IdempotencyStore()
+_draft_store = DraftStore(
+    db_path=Path.home() / ".arca-mcp" / "drafts.db"
+)
+_idempotency_store = IdempotencyStore(
+    db_path=Path.home() / ".arca-mcp" / "idempotency.db"
+)
 def _default_audit_log_path() -> Path:
-    base = Path.home() / ".arca-mcp"
+    base = Path.home() / ".arca-mcp" / "audit"
     base.mkdir(mode=0o700, parents=True, exist_ok=True)
     return base / "audit.jsonl"
 
@@ -393,7 +397,6 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
         draft_id: UUID del draft a confirmar (debe estar en estado VALIDATED).
         idempotency_key: Clave única de idempotencia para evitar doble emisión.
     """
-    _CONFIRMING = {"status": "CONFIRMING"}
     _IN_PROGRESS_ERROR = {
         "error": {
             "cause": "EMISSION_IN_PROGRESS",
@@ -405,18 +408,20 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
     }
 
     # Step 1: Check idempotency — a retry with the same key always returns the
-    # cached result. A CONFIRMING sentinel means a concurrent emission is in
-    # flight; return a clear error instead of the raw sentinel dict.
+    # cached result. A PENDING sentinel means a concurrent emission is in
+    # flight; return a clear error instead of proceeding.
     existing = await _idempotency_store.get(idempotency_key)
     if existing is not None:
-        if existing.get("status") == "CONFIRMING":
+        status, result = existing
+        if status == "PENDING":
             return _IN_PROGRESS_ERROR
-        return existing
+        # status == "DONE" — return the persisted result directly
+        return result if result is not None else {}
 
     # Step 2: Atomically claim the key before any I/O.
-    # set_if_absent is a single lock acquisition — no gap between the check
-    # and the write, so two concurrent callers can't both proceed.
-    claimed = await _idempotency_store.set_if_absent(idempotency_key, _CONFIRMING)
+    # set_pending uses INSERT OR IGNORE under a lock — no gap between
+    # the check and the write, so two concurrent callers can't both proceed.
+    claimed = await _idempotency_store.set_pending(idempotency_key)
     if not claimed:
         return _IN_PROGRESS_ERROR
 
@@ -472,7 +477,21 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
 
     token, sign = token_result
 
-    # Step 7: Call fecae_solicitar — sentinel is already in place
+    # Step 7a: Write-ahead log — record the intent BEFORE calling WSFE so that
+    # a crash between the SOAP call and result persistence is detectable.
+    await _audit_log.append(
+        {
+            "event": "PENDING_CAE",
+            "draft_id": draft_id,
+            "cuit": emitter_cuit,
+            "idempotency_key": idempotency_key,
+            "punto_venta": draft.punto_venta,
+            "cbte_tipo": draft.cbte_tipo,
+            "imp_total": str(draft.imp_total),
+        }
+    )
+
+    # Step 7b: Call fecae_solicitar — sentinel is already in place
     fecae_request = FECAESolicitarRequest(
         cuit=emitter_cuit,
         punto_venta=draft.punto_venta,
@@ -486,16 +505,23 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
         alicuota_id=draft.alicuota_id,
     )
     loop = asyncio.get_running_loop()
-    wsfe_result = await loop.run_in_executor(
-        None,
-        functools.partial(
-            wsfe_client.fecae_solicitar,
-            token=token,
-            sign=sign,
-            environment=config.environment,
-            request=fecae_request,
-        ),
-    )
+    try:
+        wsfe_result = await loop.run_in_executor(
+            None,
+            functools.partial(
+                wsfe_client.fecae_solicitar,
+                token=token,
+                sign=sign,
+                environment=config.environment,
+                request=fecae_request,
+            ),
+        )
+    except Exception:
+        # Transient / unexpected WSFE failure — delete the sentinel so the
+        # caller can retry with the same idempotency key.
+        await _idempotency_store.delete(idempotency_key)
+        raise
+
     if isinstance(wsfe_result, ArcaError):
         await _idempotency_store.delete(idempotency_key)
         return wsfe_result.model_dump()
@@ -510,21 +536,10 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
             }
         }
 
-    # Step 8: Write to audit log
-    await _audit_log.append(
-        {
-            "draft_id": draft_id,
-            "cuit": emitter_cuit,
-            "cbte_nro": wsfe_result.cbte_nro,
-            "cae": wsfe_result.cae,
-            "idempotency_key": idempotency_key,
-        }
-    )
-
-    # Step 9: Update draft status to CONFIRMED
-    await _draft_store.update_status(draft_id, DraftStatus.CONFIRMED)
-
-    # Step 10: Overwrite sentinel with the real result
+    # Step 8: Persist the final result (transitions PENDING → DONE).
+    # This must happen BEFORE CAE_CONFIRMED in the AuditLog so that a crash
+    # between these two writes leaves the idempotency key as DONE, allowing a
+    # safe retry that returns the cached result instead of calling WSFE again.
     result = {
         "cae": wsfe_result.cae,
         "cbte_nro": wsfe_result.cbte_nro,
@@ -532,7 +547,24 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
         "draft_id": draft_id,
         "idempotency_key": idempotency_key,
     }
-    await _idempotency_store.set(idempotency_key, result)
+    await _idempotency_store.set_done(idempotency_key, result)
+
+    # Step 9: Update draft status to CONFIRMED
+    await _draft_store.update_status(draft_id, DraftStatus.CONFIRMED)
+
+    # Step 10: Write confirmed result to audit log (CAE_CONFIRMED).
+    # This is the last write — at this point the result is already durable in
+    # the idempotency store so a crash here is safe.
+    await _audit_log.append(
+        {
+            "event": "CAE_CONFIRMED",
+            "draft_id": draft_id,
+            "cuit": emitter_cuit,
+            "cbte_nro": wsfe_result.cbte_nro,
+            "cae": wsfe_result.cae,
+            "idempotency_key": idempotency_key,
+        }
+    )
 
     return result
 

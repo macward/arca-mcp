@@ -9,6 +9,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from arca_mcp.config import init_server_settings
+from arca_mcp.invoicing.idempotency import IdempotencyStore
 from arca_mcp.mcp import certificates, invoicing, lookup, setup
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,14 @@ class _ApiKeyMiddleware(BaseHTTPMiddleware):
 
 
 def main() -> None:
+    # Recover from crashes: delete PENDING idempotency entries older than 5 min
+    # that were left behind by a previous process that died mid-emission.
+    _store = IdempotencyStore()
+    stale = _store.cleanup_stale_pending()
+    if stale:
+        logger.warning("startup: eliminadas %d entradas PENDING obsoletas del IdempotencyStore", stale)
+    _store.close()
+
     settings = init_server_settings()
     logger.info(
         "arca-mcp iniciado | environment=%s cert_configured=%s key_configured=%s cuit=%s",
