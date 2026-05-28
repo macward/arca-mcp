@@ -55,7 +55,7 @@ async def generate_qr(
     moneda: str,
     ctz: float,
     tipoDocRec: int,
-    nroDocRec: str,
+    nroDocRec: int,
     codAut: str,
 ) -> dict:
     """Genera el código QR AFIP para un comprobante confirmado.
@@ -72,8 +72,8 @@ async def generate_qr(
         importe: Importe total del comprobante.
         moneda: Código de moneda (ej: "PES").
         ctz: Cotización de la moneda.
-        tipoDocRec: Tipo de documento del receptor.
-        nroDocRec: Número de documento del receptor.
+        tipoDocRec: Tipo de documento del receptor (80=CUIT, 96=DNI, 99=Consumidor Final).
+        nroDocRec: Número de documento del receptor como entero. Para tipoDocRec=99 el modelo lo fuerza a 0.
         codAut: CAE de 14 dígitos numéricos.
     """
     try:
@@ -91,13 +91,17 @@ async def generate_qr(
             codAut=codAut,
         )
     except Exception as exc:  # noqa: BLE001 — Pydantic ValidationError
-        msg = str(exc)
-        cause = ArcaErrorCause.INVALID_CAE if "codAut" in msg else ArcaErrorCause.INVALID_CATALOG_VALUE
-        return {"error": {"cause": cause, "message": msg}}
+        from pydantic import ValidationError as _PydanticValidationError
+
+        if isinstance(exc, _PydanticValidationError) and any(
+            "codAut" in str(e.get("loc", ())) for e in exc.errors()
+        ):
+            cause = ArcaErrorCause.INVALID_CAE
+        else:
+            cause = ArcaErrorCause.INVALID_CATALOG_VALUE
+        return {"error": {"cause": cause, "message": str(exc)}}
 
     url_result = build_qr_url(payload)
-    if isinstance(url_result, ArcaError):
-        return {"error": url_result.model_dump()}
 
     try:
         qr_png = generate_qr_png(payload)

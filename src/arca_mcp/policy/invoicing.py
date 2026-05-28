@@ -163,8 +163,8 @@ def validate_draft(draft: VoucherDraft) -> ValidationReport:
                 )
             )
 
-    # Rule 4 — cuit_receptor must pass CUIT check-digit validation
-    if not _is_valid_cuit(draft.cuit_receptor):
+    # Rule 4 — cuit_receptor must pass CUIT check-digit validation (CUIT only; skip for DNI and Consumidor Final)
+    if draft.doc_tipo == 80 and not _is_valid_cuit(draft.cuit_receptor):
         errors.append(
             ValidationError(
                 field="cuit_receptor",

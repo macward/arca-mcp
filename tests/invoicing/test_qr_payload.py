@@ -2,14 +2,14 @@
 
 import base64
 import json
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
-from arca_mcp.errors import ArcaError, ArcaErrorCause
 from arca_mcp.invoicing.qr import QRPayload, build_qr_url
 
-VALID_PAYLOAD = dict(
+VALID_PAYLOAD: dict[str, Any] = dict(
     fecha="2024-01-15",
     cuit="20123456789",
     ptoVta=1,
@@ -19,7 +19,7 @@ VALID_PAYLOAD = dict(
     moneda="PES",
     ctz=1.0,
     tipoDocRec=80,
-    nroDocRec="20987654321",
+    nroDocRec=20987654321,
     codAut="12345678901234",
 )
 
@@ -56,13 +56,6 @@ def test_cae_non_numeric_raises_validation_error():
         QRPayload(**{**VALID_PAYLOAD, "codAut": "1234567890123X"})
 
 
-def test_build_qr_url_defensive_invalid_cae():
-    """build_qr_url returns INVALID_CAE when bypassing model validation."""
-    payload = QRPayload.model_construct(codAut="short")
-    result = build_qr_url(payload)
-    assert isinstance(result, ArcaError)
-    assert result.cause == ArcaErrorCause.INVALID_CAE
-
 
 def test_valid_url_decodes_to_original_json():
     payload = QRPayload(**VALID_PAYLOAD)
@@ -75,3 +68,45 @@ def test_valid_url_decodes_to_original_json():
     assert decoded["codAut"] == VALID_PAYLOAD["codAut"]
     assert decoded["cuit"] == VALID_PAYLOAD["cuit"]
     assert decoded["tipoCodAut"] == "E"
+
+
+def test_nro_doc_rec_consumidor_final_is_zero():
+    """doc_tipo=99 (Consumidor Final) must force nroDocRec to 0."""
+    payload = QRPayload(**{**VALID_PAYLOAD, "tipoDocRec": 99, "nroDocRec": 20123456789})
+    assert payload.nroDocRec == 0
+
+
+def test_nro_doc_rec_cuit_uses_receptor_value():
+    """doc_tipo=80 (CUIT) must preserve the provided nroDocRec as int."""
+    cuit_receptor = 20987654321
+    payload = QRPayload(**{**VALID_PAYLOAD, "tipoDocRec": 80, "nroDocRec": cuit_receptor})
+    assert payload.nroDocRec == cuit_receptor
+
+
+def test_nro_doc_rec_dni_uses_receptor_value():
+    """doc_tipo=96 (DNI) must preserve the provided nroDocRec as int."""
+    dni = 30123456
+    payload = QRPayload(**{**VALID_PAYLOAD, "tipoDocRec": 96, "nroDocRec": dni})
+    assert payload.nroDocRec == dni
+
+
+def _decode_qr_json(url: str) -> dict:
+    b64 = url.split("?p=")[1]
+    return json.loads(base64.urlsafe_b64decode(b64 + "==").decode())
+
+
+def test_importe_whole_float_serializes_without_decimals():
+    payload = QRPayload(**{**VALID_PAYLOAD, "importe": 1000.0})
+    url = build_qr_url(payload)
+    assert isinstance(url, str)
+    raw = base64.urlsafe_b64decode(url.split("?p=")[1] + "==").decode()
+    assert '"importe":1000' in raw
+    assert '"importe":1000.' not in raw
+
+
+def test_importe_fractional_float_serializes_with_decimals():
+    payload = QRPayload(**{**VALID_PAYLOAD, "importe": 1000.5})
+    url = build_qr_url(payload)
+    assert isinstance(url, str)
+    decoded = _decode_qr_json(url)
+    assert decoded["importe"] == 1000.5

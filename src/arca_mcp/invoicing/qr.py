@@ -8,9 +8,8 @@ import re
 from typing import Literal
 
 import qrcode
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-from arca_mcp.errors import ArcaError, ArcaErrorCause
 
 _CAE_RE = re.compile(r"^\d{14}$")
 _CUIT_RE = re.compile(r"^\d{11}$")
@@ -29,9 +28,15 @@ class QRPayload(BaseModel):
     moneda: str
     ctz: float
     tipoDocRec: int
-    nroDocRec: str = Field(description="Número de documento del receptor (1-11 dígitos, o '0' para consumidor final)")
+    nroDocRec: int = Field(description="Número de documento del receptor como entero (0 para Consumidor Final)")
     tipoCodAut: Literal["E"] = "E"
     codAut: str = Field(description="CAE de 14 dígitos numéricos")
+
+    @model_validator(mode="after")
+    def _derive_nro_doc_rec(self) -> "QRPayload":
+        if self.tipoDocRec == 99:
+            self.nroDocRec = 0
+        return self
 
     @field_validator("fecha")
     @classmethod
@@ -57,32 +62,31 @@ class QRPayload(BaseModel):
         return v
 
 
+class _CompactFloatEncoder(json.JSONEncoder):
+    def encode(self, o: object) -> str:
+        if isinstance(o, dict):
+            o = {k: (int(v) if isinstance(v, float) and v == int(v) else v) for k, v in o.items()}
+        return super().encode(o)
+
+
 def generate_qr_png(payload: QRPayload) -> bytes:
     """Return a PNG image of the QR code for the given payload.
 
     The QR encodes the ARCA URL and is generated in memory — no disk writes.
     """
     url = build_qr_url(payload)
-    if isinstance(url, ArcaError):
-        raise ValueError(url.message)
     img = qrcode.make(url)
     with io.BytesIO() as buf:
-        img.save(buf, format="PNG")
+        img.save(buf, format="PNG")  # pyright: ignore[reportCallIssue]
         return buf.getvalue()
 
 
-def build_qr_url(payload: QRPayload) -> str | ArcaError:
+def build_qr_url(payload: QRPayload) -> str:
     """Return the ARCA QR URL for the given payload.
 
-    Returns ArcaError(INVALID_CAE) if codAut is not 14 numeric digits.
-    Validation at the model level should catch this first, but this
-    provides a defensive check for callers that bypass model validation.
+    Assumes payload has already been validated via the QRPayload constructor.
+    codAut is guaranteed to be 14 numeric digits by the model's field_validator.
     """
-    if not _CAE_RE.match(payload.codAut):
-        return ArcaError(
-            cause=ArcaErrorCause.INVALID_CAE,
-            message=f"codAut must be exactly 14 numeric digits, got: '{payload.codAut}'",
-        )
-    data = json.dumps(payload.model_dump(), separators=(",", ":"))
+    data = json.dumps(payload.model_dump(), separators=(",", ":"), cls=_CompactFloatEncoder)
     encoded = base64.urlsafe_b64encode(data.encode()).rstrip(b"=").decode()
     return f"{_QR_BASE}{encoded}"

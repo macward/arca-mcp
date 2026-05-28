@@ -19,7 +19,7 @@ VALID_QR_PARAMS = dict(
     moneda="PES",
     ctz=1.0,
     tipoDocRec=80,
-    nroDocRec="20987654321",
+    nroDocRec=20987654321,
     codAut="12345678901234",
 )
 
@@ -46,3 +46,28 @@ async def test_invalid_cae_13_digits_returns_invalid_cae():
     result = await generate_qr(**params)
     assert "error" in result
     assert result["error"]["cause"] == "INVALID_CAE"
+
+
+@pytest.mark.asyncio
+async def test_invalid_cae_alpha_returns_invalid_cae():
+    params = {**VALID_QR_PARAMS, "codAut": "1234567890123X"}  # non-numeric
+    result = await generate_qr(**params)
+    assert "error" in result
+    assert result["error"]["cause"] == "INVALID_CAE"
+
+
+@pytest.mark.asyncio
+async def test_invalid_other_field_returns_invalid_catalog_value():
+    params = {**VALID_QR_PARAMS, "fecha": "not-a-date"}
+    result = await generate_qr(**params)
+    assert "error" in result
+    assert result["error"]["cause"] == "INVALID_CATALOG_VALUE"
+
+
+@pytest.mark.asyncio
+async def test_error_message_containing_codAut_string_in_non_cae_field_does_not_cause_false_positive():
+    """An ARCA error message that happens to contain the text 'codAut' but originates
+    from a different field must not be classified as INVALID_CAE."""
+    params = {**VALID_QR_PARAMS, "fecha": "not-a-date"}
+    result = await generate_qr(**params)
+    assert result["error"]["cause"] != "INVALID_CAE"

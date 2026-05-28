@@ -255,20 +255,20 @@ def fecae_solicitar(
         "CbteDesde": 0,  # WSFE asigna el número
         "CbteHasta": 0,
         "CbteFch": request.fecha_cbte,
-        "ImpTotal": float(request.imp_total),
-        "ImpTotConc": 0,
-        "ImpNeto": float(request.imp_neto),
-        "ImpOpEx": 0,
-        "ImpIVA": float(request.imp_iva),
-        "ImpTrib": 0,
+        "ImpTotal": request.imp_total,
+        "ImpTotConc": Decimal(0),
+        "ImpNeto": request.imp_neto,
+        "ImpOpEx": Decimal(0),
+        "ImpIVA": request.imp_iva,
+        "ImpTrib": Decimal(0),
         "MonId": "PES",
         "MonCotiz": 1,
         "Iva": {
             "AlicIva": [
                 {
                     "Id": int(request.alicuota_id),
-                    "BaseImp": float(request.imp_neto),
-                    "Importe": float(request.imp_iva),
+                    "BaseImp": request.imp_neto,
+                    "Importe": request.imp_iva,
                 }
             ]
         },

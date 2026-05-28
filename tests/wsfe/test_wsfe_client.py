@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,11 +13,12 @@ import arca_mcp.wsfe.client as _wsfe_client_mod
 from arca_mcp.errors import ArcaError, ArcaErrorCause
 from arca_mcp.wsfe.client import (
     _get_wsfe_client,
+    fecae_solicitar,
     get_aliquot_types,
     get_currency_types,
     get_voucher_types,
 )
-from arca_mcp.wsfe.models import CatalogItem
+from arca_mcp.wsfe.models import CatalogItem, FECAESolicitarRequest
 
 TOKEN = "fake-token"
 SIGN = "fake-sign"
@@ -280,3 +282,110 @@ class TestClientCache:
             second = _get_wsfe_client("https://example.com/b.wsdl")
 
         assert first is not second
+
+
+# ---------------------------------------------------------------------------
+# fecae_solicitar — DocNro mapping for Consumidor Final (doc_tipo=99)
+# ---------------------------------------------------------------------------
+
+from decimal import Decimal
+
+
+def _make_fecae_request(**overrides: Any) -> FECAESolicitarRequest:
+    defaults: dict[str, Any] = dict(
+        cuit="20123456786",
+        punto_venta=1,
+        cbte_tipo=6,
+        fecha_cbte="20260519",
+        cuit_receptor="0",
+        doc_tipo=99,
+        imp_neto=Decimal("1000.00"),
+        imp_iva=Decimal("210.00"),
+        imp_total=Decimal("1210.00"),
+        alicuota_id="5",
+        concepto=1,
+    )
+    defaults.update(overrides)
+    return FECAESolicitarRequest(**defaults)
+
+
+def _make_fecae_soap_response(cae="12345678901234", cbte_nro=1, resultado="A") -> SimpleNamespace:
+    det = SimpleNamespace(
+        CAE=cae,
+        CbteDesde=cbte_nro,
+        CAEFchVto="20260529",
+        Resultado=resultado,
+        Observaciones=None,
+    )
+    return SimpleNamespace(
+        FeDetResp=SimpleNamespace(FECAEDetResponse=[det]),
+        Errors=None,
+    )
+
+
+class TestFECAESolicitarDocNroMapping:
+    def test_consumidor_final_sets_doc_nro_zero(self):
+        """doc_tipo=99 debe enviar DocNro=0 al struct SOAP."""
+        req = _make_fecae_request(doc_tipo=99, cuit_receptor="0")
+        mock_client = MagicMock()
+        mock_client.service.FECAESolicitar.return_value = _make_fecae_soap_response()
+
+        with patch("arca_mcp.wsfe.client.zeep.Client", return_value=mock_client):
+            fecae_solicitar(TOKEN, SIGN, ENV, req)
+
+        call_kwargs = mock_client.service.FECAESolicitar.call_args
+        fe_cae_req = call_kwargs.kwargs.get("FeCAEReq") or call_kwargs.args[1]
+        det = fe_cae_req["FeDetReq"]["FECAEDetRequest"][0]
+        assert det["DocTipo"] == 99
+        assert det["DocNro"] == 0
+
+    def test_cuit_receptor_sets_doc_nro_to_cuit(self):
+        """doc_tipo=80 debe enviar DocNro igual al CUIT del receptor."""
+        cuit_rec = "20123456786"
+        req = _make_fecae_request(doc_tipo=80, cuit_receptor=cuit_rec)
+        mock_client = MagicMock()
+        mock_client.service.FECAESolicitar.return_value = _make_fecae_soap_response()
+
+        with patch("arca_mcp.wsfe.client.zeep.Client", return_value=mock_client):
+            fecae_solicitar(TOKEN, SIGN, ENV, req)
+
+        call_kwargs = mock_client.service.FECAESolicitar.call_args
+        fe_cae_req = call_kwargs.kwargs.get("FeCAEReq") or call_kwargs.args[1]
+        det = fe_cae_req["FeDetReq"]["FECAEDetRequest"][0]
+        assert det["DocTipo"] == 80
+        assert det["DocNro"] == int(cuit_rec)
+
+    def test_produccion_returns_arca_error(self):
+        """fecae_solicitar en producción retorna ArcaError."""
+        req = _make_fecae_request()
+        result = fecae_solicitar(TOKEN, SIGN, "produccion", req)
+        assert isinstance(result, ArcaError)
+        assert result.cause == ArcaErrorCause.UNSUPPORTED_ENVIRONMENT
+
+    def test_importe_fields_are_decimal_not_float(self):
+        """Los campos de importe enviados a zeep deben ser Decimal, no float."""
+        req = _make_fecae_request(
+            imp_neto=Decimal("1000.01"),
+            imp_iva=Decimal("210.002"),
+            imp_total=Decimal("1210.012"),
+        )
+        mock_client = MagicMock()
+        mock_client.service.FECAESolicitar.return_value = _make_fecae_soap_response()
+
+        with patch("arca_mcp.wsfe.client.zeep.Client", return_value=mock_client):
+            fecae_solicitar(TOKEN, SIGN, ENV, req)
+
+        call_kwargs = mock_client.service.FECAESolicitar.call_args
+        fe_cae_req = call_kwargs.kwargs.get("FeCAEReq") or call_kwargs.args[1]
+        det = fe_cae_req["FeDetReq"]["FECAEDetRequest"][0]
+
+        assert isinstance(det["ImpTotal"], Decimal), "ImpTotal debe ser Decimal"
+        assert isinstance(det["ImpNeto"], Decimal), "ImpNeto debe ser Decimal"
+        assert isinstance(det["ImpIVA"], Decimal), "ImpIVA debe ser Decimal"
+        assert det["ImpTotal"] == Decimal("1210.012")
+        assert det["ImpNeto"] == Decimal("1000.01")
+        assert det["ImpIVA"] == Decimal("210.002")
+
+        aliciva = det["Iva"]["AlicIva"][0]
+        assert isinstance(aliciva["BaseImp"], Decimal), "AlicIva.BaseImp debe ser Decimal"
+        assert isinstance(aliciva["Importe"], Decimal), "AlicIva.Importe debe ser Decimal"

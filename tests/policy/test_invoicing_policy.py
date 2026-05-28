@@ -9,7 +9,6 @@ import pytest
 
 from arca_mcp.invoicing.models import VoucherDraft
 from arca_mcp.policy.invoicing import (
-    ValidationReport,
     _amounts_consistent,
     _is_valid_cuit,
     validate_draft,
@@ -234,6 +233,74 @@ class TestValidateDraftInvalidCuit:
         cuit_errors = [e for e in report.errors if e.code == "INVALID_CUIT"]
         assert cuit_errors, "Expected INVALID_CUIT error"
         assert cuit_errors[0].field == "cuit_receptor"
+
+
+class TestValidateDraftConsumidorFinal:
+    def test_doc_tipo_99_with_cuit_receptor_zero_passes(self):
+        """Consumidor Final: doc_tipo=99, cuit_receptor='0' must be valid."""
+        draft = _make_draft(doc_tipo=99, cuit_receptor="0")
+        report = validate_draft(draft)
+        cuit_errors = [e for e in report.errors if e.code == "INVALID_CUIT"]
+        assert not cuit_errors, "INVALID_CUIT must not fire for doc_tipo=99"
+
+    def test_doc_tipo_99_full_draft_is_valid(self):
+        """A complete Consumidor Final draft passes all policy rules."""
+        draft = _make_draft(cbte_tipo=6, doc_tipo=99, cuit_receptor="0")
+        report = validate_draft(draft)
+        assert report.is_valid is True, f"Expected valid draft, got errors: {report.errors}"
+
+    def test_voucher_draft_model_accepts_zero_for_doc_tipo_99(self):
+        """VoucherDraft Pydantic model accepts cuit_receptor='0' when doc_tipo=99."""
+        draft = _make_draft(doc_tipo=99, cuit_receptor="0")
+        assert draft.cuit_receptor == "0"
+        assert draft.doc_tipo == 99
+
+    def test_voucher_draft_model_rejects_non_zero_for_doc_tipo_99(self):
+        """VoucherDraft rejects a non-'0' cuit_receptor when doc_tipo=99."""
+        from pydantic import ValidationError as PydanticValidationError
+
+        with pytest.raises(PydanticValidationError):
+            _make_draft(doc_tipo=99, cuit_receptor=_VALID_CUIT)
+
+
+class TestValidateDraftDNI:
+    def test_doc_tipo_96_with_8_digit_dni_passes_model(self):
+        draft = _make_draft(doc_tipo=96, cuit_receptor="12345678")
+        assert draft.cuit_receptor == "12345678"
+        assert draft.doc_tipo == 96
+
+    def test_doc_tipo_96_with_7_digit_dni_passes_model(self):
+        draft = _make_draft(doc_tipo=96, cuit_receptor="1234567")
+        assert draft.cuit_receptor == "1234567"
+
+    def test_doc_tipo_96_with_empty_string_raises(self):
+        from pydantic import ValidationError as PydanticValidationError
+        with pytest.raises(PydanticValidationError):
+            _make_draft(doc_tipo=96, cuit_receptor="")
+
+    def test_doc_tipo_96_with_11_digit_cuit_raises(self):
+        from pydantic import ValidationError as PydanticValidationError
+        with pytest.raises(PydanticValidationError):
+            _make_draft(doc_tipo=96, cuit_receptor=_VALID_CUIT)
+
+    def test_doc_tipo_96_no_invalid_cuit_error_in_policy(self):
+        draft = _make_draft(doc_tipo=96, cuit_receptor="12345678")
+        report = validate_draft(draft)
+        cuit_errors = [e for e in report.errors if e.code == "INVALID_CUIT"]
+        assert not cuit_errors
+
+    def test_doc_tipo_80_with_valid_cuit_passes(self):
+        draft = _make_draft(doc_tipo=80, cuit_receptor=_VALID_CUIT)
+        report = validate_draft(draft)
+        cuit_errors = [e for e in report.errors if e.code == "INVALID_CUIT"]
+        assert not cuit_errors
+
+    def test_doc_tipo_80_with_bad_check_digit_raises_policy_error(self):
+        bad_cuit = _VALID_CUIT[:-1] + str((int(_VALID_CUIT[-1]) + 1) % 10)
+        draft = _make_draft(doc_tipo=80, cuit_receptor=bad_cuit)
+        report = validate_draft(draft)
+        codes = [e.code for e in report.errors]
+        assert "INVALID_CUIT" in codes
 
 
 class TestValidateDraftInvalidAlicuota:
