@@ -67,10 +67,12 @@ El ambiente debe ser siempre explícito en configuración; nunca inferido.
 |---|---|---|---|
 | v0.1 | Setup Doctor | ✅ Released | Diagnóstico técnico de certificados + WSAA |
 | v0.2 | Lookup Layer | ✅ Released | Consultas deterministas (padrón, catálogos, validaciones) |
-| v0.3 | WSAA Infra Robusta | ⏳ | Caché de token, retry, observabilidad |
-| v0.4 | Draft-Based Invoicing | ⏳ | Emisión segura con `draft → validate → confirm` |
-| v0.5 | Event Layer | ⏳ | Comprobantes entrantes, webhooks |
-| v1.0 | Producción + Playwright | ⏳ | Producción habilitada + automatización del portal ARCA |
+| v0.3 | WSAA Infra Robusta | ✅ Released | Caché de token, retry, observabilidad |
+| v0.4 | Draft-Based Invoicing | ✅ Released | Emisión segura con `draft → validate → confirm` |
+| v0.5 | PDF + QR | ✅ Released | PDF de comprobante con QR embebido |
+| v0.6 | Persistencia Crítica | ✅ Released | WAL, SQLite stores, crash recovery |
+| v0.7 | Event Layer | ⏳ Planificado | Comprobantes entrantes, webhooks |
+| v1.0 | Producción + Playwright | ⏳ Planificado | Producción habilitada + automatización del portal ARCA |
 
 **Fuente de verdad:** `docs/ROADMAP.md` (scope, criterios de aceptación, dependencias por fase).
 **Diseño estratégico:** meridian → `arca-mcp/research/verticales-y-roadmap-estrategico.md`.

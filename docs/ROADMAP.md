@@ -25,7 +25,9 @@
 | **v0.2** | Lookup Layer | ✅ Released | Consultas deterministas a ARCA (padrón, catálogos, validaciones) |
 | **v0.3** | WSAA Infra Robusta | ✅ Released | Caché de token, retry, observabilidad |
 | **v0.4** | Draft-Based Invoicing | ✅ Released | Emisión segura con flow `draft → validate → confirm` |
-| **v0.5** | Event Layer | ⏳ Planificado | Comprobantes entrantes, webhooks, detección de eventos |
+| **v0.5** | PDF + QR | ✅ Released | PDF de comprobante con QR embebido |
+| **v0.6** | Persistencia Crítica | ✅ Released | WAL, SQLite stores, crash recovery |
+| **v0.7** | Event Layer | ⏳ Planificado | Comprobantes entrantes, webhooks, detección de eventos |
 | **v1.0** | Producción + Playwright | ⏳ Planificado | Producción habilitada + automatización del portal ARCA |
 
 ---
@@ -198,7 +200,23 @@
 
 ---
 
-## v0.5 — Event Layer
+## v0.5 — PDF + QR
+
+**Estado:** ✅ Released (ver CHANGELOG v0.5.0)
+
+> Esta versión completó el criterio pendiente de v0.4: PDF con QR validable. Se publicó como minor porque el scope superó un patch.
+
+---
+
+## v0.6 — Persistencia Crítica
+
+**Estado:** ✅ Released (ver CHANGELOG v0.6.0)
+
+> WAL mode en SQLite, escritura atómica en audit log, unificación de WsaaCache, crash recovery en IdempotencyStore y DraftStore.
+
+---
+
+## v0.7 — Event Layer
 
 **Estado:** ⏳ Planificado
 **Objetivo:** Pasar de request/response a event-driven. Convertir ARCA en infraestructura observable.
@@ -235,7 +253,7 @@
 
 ### Dependencias
 
-- v0.4 (necesitamos saber cómo modelar comprobantes para los eventos)
+- v0.6 (crash recovery y stores persistentes necesarios para deduplicación de eventos)
 
 ---
 
