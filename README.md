@@ -1,8 +1,13 @@
 # arca-mcp
 
+[![CI](https://github.com/macward/arca-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/macward/arca-mcp/actions/workflows/ci.yml)
+[![PyPI version](https://img.shields.io/pypi/v/arca-mcp.svg)](https://pypi.org/project/arca-mcp/)
+[![Python](https://img.shields.io/pypi/pyversions/arca-mcp.svg)](https://pypi.org/project/arca-mcp/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 MCP server para operaciones fiscales con ARCA/AFIP. Expone herramientas deterministas para consulta de catálogos, validación de contribuyentes y emisión de comprobantes mediante un flujo Human-in-the-Loop.
 
-> **Estado:** v0.5.0 — solo homologación. Producción habilitada en v1.0.
+> **Estado:** v0.6.0 — solo homologación. Producción habilitada en v1.0.
 
 ---
 
