@@ -25,7 +25,7 @@ from arca_mcp.mcp._auth import get_wsaa_token as _get_wsaa_token
 from arca_mcp.mcp._auth import require_emitter_cuit as _require_emitter_cuit
 from arca_mcp.policy import invoicing as policy
 from arca_mcp.wsfe import client as wsfe_client
-from arca_mcp.wsfe.models import FECAESolicitarRequest, FECompConsultarRequest
+from arca_mcp.wsfe.models import FECAESolicitarRequest, FECAESolicitarResponse, FECompConsultarRequest
 
 server = fastmcp.FastMCP("invoicing")
 
@@ -382,67 +382,61 @@ async def get_voucher_info(punto_venta: int, cbte_tipo: int, cbte_nro: int) -> d
     return result.model_dump()
 
 
-@server.tool
-async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
-    """Confirma la emisión de un comprobante a partir de un draft VALIDADO.
-
-    Solicita el CAE a WSFE (FECAESolicitar) y registra la operación en el
-    audit log. Solo se puede confirmar un draft en estado VALIDATED.
-    Requiere idempotency_key para prevenir doble emisión ante reintentos.
-
-    La configuración (cert, key, ambiente, CUIT) se toma de las variables de
-    entorno ARCA_CERT_PATH, ARCA_KEY_PATH, ARCA_ENVIRONMENT y ARCA_CUIT.
-
-    Args:
-        draft_id: UUID del draft a confirmar (debe estar en estado VALIDATED).
-        idempotency_key: Clave única de idempotencia para evitar doble emisión.
-    """
-    _IN_PROGRESS_ERROR = {
-        "error": {
-            "cause": "EMISSION_IN_PROGRESS",
-            "message": (
-                "Una emisión con esta clave de idempotencia ya está en curso. "
-                "Reintentá en unos segundos."
-            ),
-        }
+_IN_PROGRESS_ERROR: dict = {
+    "error": {
+        "cause": "EMISSION_IN_PROGRESS",
+        "message": (
+            "Una emisión con esta clave de idempotencia ya está en curso. "
+            "Reintentá en unos segundos."
+        ),
     }
+}
 
-    # Step 1: Check idempotency — a retry with the same key always returns the
-    # cached result. A PENDING sentinel means a concurrent emission is in
-    # flight; return a clear error instead of proceeding.
+
+def _in_progress_error() -> dict:
+    """Return a fresh copy of the in-progress error so callers can't mutate the constant."""
+    return {"error": dict(_IN_PROGRESS_ERROR["error"])}
+
+
+async def _claim_idempotency(idempotency_key: str) -> dict | None:
+    """Check and atomically claim an idempotency key.
+
+    Returns a response dict if the call should short-circuit (DONE cached result,
+    or in-progress error), or None if the key was successfully claimed and the
+    caller should proceed.
+    """
     existing = await _idempotency_store.get(idempotency_key)
     if existing is not None:
         status, result = existing
         if status == "PENDING":
-            return _IN_PROGRESS_ERROR
-        # status == "DONE" — return the persisted result directly
+            return _in_progress_error()
         return result if result is not None else {}
-
-    # Step 2: Atomically claim the key before any I/O.
-    # set_pending uses INSERT OR IGNORE under a lock — no gap between
-    # the check and the write, so two concurrent callers can't both proceed.
     claimed = await _idempotency_store.set_pending(idempotency_key)
     if not claimed:
-        return _IN_PROGRESS_ERROR
+        return _in_progress_error()
+    return None
 
-    # From here every early-return path must release the claim via delete()
-    # so the caller can retry with the same key after fixing the error.
 
-    # Step 3: Retrieve draft
+async def _load_validated_draft(
+    draft_id: str, idempotency_key: str
+) -> tuple[VoucherDraft, None] | tuple[None, dict]:
+    """Load a draft and verify it is in VALIDATED status.
+
+    Releases the idempotency claim on failure so the caller can retry.
+    Returns (draft, None) on success, (None, error_dict) on failure.
+    """
     draft = await _draft_store.get(draft_id)
     if draft is None:
         await _idempotency_store.delete(idempotency_key)
-        return {
+        return None, {
             "error": {
                 "cause": "DRAFT_NOT_FOUND",
                 "message": f"No se encontró el draft con id '{draft_id}'.",
             }
         }
-
-    # Step 4: Verify draft is VALIDATED
     if draft.status != DraftStatus.VALIDATED:
         await _idempotency_store.delete(idempotency_key)
-        return {
+        return None, {
             "error": {
                 "cause": "DRAFT_NOT_VALIDATED",
                 "message": (
@@ -451,38 +445,43 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
                 ),
             }
         }
+    return draft, None
 
-    # Step 5: Resolve RuntimeConfig
+
+async def _invoke_wsfe(
+    draft: VoucherDraft, idempotency_key: str
+) -> tuple[FECAESolicitarResponse, str] | dict:
+    """Resolve config, obtain WSAA token, write WAL entry, and call fecae_solicitar.
+
+    Releases the idempotency claim on every failure path (re-raises on transient
+    exceptions so the sentinel is removed and the caller can retry).
+    Returns (wsfe_result, emitter_cuit) on success, error_dict on failure.
+    """
     config = resolve_runtime_config()
     if isinstance(config, ArcaError):
         await _idempotency_store.delete(idempotency_key)
-        return config.model_dump()
+        return {"error": config.model_dump()}
 
     emitter_cuit = _require_emitter_cuit(config.emitter_cuit)
     if isinstance(emitter_cuit, ArcaError):
         await _idempotency_store.delete(idempotency_key)
-        return emitter_cuit.model_dump()
+        return {"error": emitter_cuit.model_dump()}
 
-    # Step 6: Get WSAA token
     token_result = await _get_wsaa_token(
-        config.cert_path,
-        config.key_path,
-        config.environment,
-        service="wsfe",
-        cuit=emitter_cuit,
+        config.cert_path, config.key_path, config.environment, service="wsfe", cuit=emitter_cuit
     )
     if isinstance(token_result, ArcaError):
         await _idempotency_store.delete(idempotency_key)
-        return token_result.model_dump()
+        return {"error": token_result.model_dump()}
 
     token, sign = token_result
 
-    # Step 7a: Write-ahead log — record the intent BEFORE calling WSFE so that
-    # a crash between the SOAP call and result persistence is detectable.
+    # Write-ahead log — record intent BEFORE calling WSFE so a crash between
+    # the SOAP call and result persistence is detectable.
     await _audit_log.append(
         {
             "event": "PENDING_CAE",
-            "draft_id": draft_id,
+            "draft_id": draft.draft_id,
             "cuit": emitter_cuit,
             "idempotency_key": idempotency_key,
             "punto_venta": draft.punto_venta,
@@ -491,7 +490,6 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
         }
     )
 
-    # Step 7b: Call fecae_solicitar — sentinel is already in place
     fecae_request = FECAESolicitarRequest(
         cuit=emitter_cuit,
         punto_venta=draft.punto_venta,
@@ -517,14 +515,13 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
             ),
         )
     except Exception:
-        # Transient / unexpected WSFE failure — delete the sentinel so the
-        # caller can retry with the same idempotency key.
+        # Transient / unexpected failure — remove sentinel so the caller can retry.
         await _idempotency_store.delete(idempotency_key)
         raise
 
     if isinstance(wsfe_result, ArcaError):
         await _idempotency_store.delete(idempotency_key)
-        return wsfe_result.model_dump()
+        return {"error": wsfe_result.model_dump()}
 
     if wsfe_result.resultado == "R":
         await _idempotency_store.delete(idempotency_key)
@@ -536,10 +533,27 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
             }
         }
 
-    # Step 8: Persist the final result (transitions PENDING → DONE).
-    # This must happen BEFORE CAE_CONFIRMED in the AuditLog so that a crash
-    # between these two writes leaves the idempotency key as DONE, allowing a
-    # safe retry that returns the cached result instead of calling WSFE again.
+    return wsfe_result, emitter_cuit
+
+
+async def _persist_emission(
+    draft_id: str,
+    idempotency_key: str,
+    emitter_cuit: str,
+    wsfe_result: FECAESolicitarResponse,
+) -> dict:
+    """Persist the emission result: idempotency DONE, draft CONFIRMED, audit CAE_CONFIRMED.
+
+    Write order matters: idempotency store is written first so a crash between
+    the last two writes leaves the key as DONE, enabling a safe retry that
+    returns the cached result instead of calling WSFE again.
+
+    If ``set_done`` fails, the CAE has already been granted by WSFE — re-emitting
+    would duplicate the invoice. We write a ``CAE_PERSISTENCE_FAILED`` audit
+    entry preserving the CAE for manual recovery and re-raise. The idempotency
+    key is intentionally NOT deleted: subsequent retries return ``EMISSION_IN_PROGRESS``,
+    forcing operations to investigate rather than re-charge a duplicate CAE.
+    """
     result = {
         "cae": wsfe_result.cae,
         "cbte_nro": wsfe_result.cbte_nro,
@@ -547,14 +561,29 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
         "draft_id": draft_id,
         "idempotency_key": idempotency_key,
     }
-    await _idempotency_store.set_done(idempotency_key, result)
-
-    # Step 9: Update draft status to CONFIRMED
+    try:
+        await _idempotency_store.set_done(idempotency_key, result)
+    except Exception as exc:
+        # Best-effort: preserve the CAE in the audit log so it can be recovered
+        # manually. The audit log uses a separate file-backed store so it has
+        # a chance of succeeding even when the idempotency SQLite is broken.
+        try:
+            await _audit_log.append(
+                {
+                    "event": "CAE_PERSISTENCE_FAILED",
+                    "draft_id": draft_id,
+                    "cuit": emitter_cuit,
+                    "cbte_nro": wsfe_result.cbte_nro,
+                    "cae": wsfe_result.cae,
+                    "cae_fch_vto": wsfe_result.cae_fch_vto,
+                    "idempotency_key": idempotency_key,
+                    "error": repr(exc),
+                }
+            )
+        except Exception:  # noqa: BLE001 — audit log itself failed; nothing more we can do
+            pass
+        raise
     await _draft_store.update_status(draft_id, DraftStatus.CONFIRMED)
-
-    # Step 10: Write confirmed result to audit log (CAE_CONFIRMED).
-    # This is the last write — at this point the result is already durable in
-    # the idempotency store so a crash here is safe.
     await _audit_log.append(
         {
             "event": "CAE_CONFIRMED",
@@ -565,8 +594,38 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
             "idempotency_key": idempotency_key,
         }
     )
-
     return result
+
+
+@server.tool
+async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
+    """Confirma la emisión de un comprobante a partir de un draft VALIDADO.
+
+    Solicita el CAE a WSFE (FECAESolicitar) y registra la operación en el
+    audit log. Solo se puede confirmar un draft en estado VALIDATED.
+    Requiere idempotency_key para prevenir doble emisión ante reintentos.
+
+    La configuración (cert, key, ambiente, CUIT) se toma de las variables de
+    entorno ARCA_CERT_PATH, ARCA_KEY_PATH, ARCA_ENVIRONMENT y ARCA_CUIT.
+
+    Args:
+        draft_id: UUID del draft a confirmar (debe estar en estado VALIDATED).
+        idempotency_key: Clave única de idempotencia para evitar doble emisión.
+    """
+    early = await _claim_idempotency(idempotency_key)
+    if early is not None:
+        return early
+
+    draft, err = await _load_validated_draft(draft_id, idempotency_key)
+    if err is not None:
+        return err
+    # draft is VoucherDraft here — guaranteed by _load_validated_draft contract
+    wsfe_outcome = await _invoke_wsfe(draft, idempotency_key)  # type: ignore[arg-type]
+    if isinstance(wsfe_outcome, dict):
+        return wsfe_outcome
+
+    wsfe_result, emitter_cuit = wsfe_outcome
+    return await _persist_emission(draft_id, idempotency_key, emitter_cuit, wsfe_result)
 
 
 @server.tool
