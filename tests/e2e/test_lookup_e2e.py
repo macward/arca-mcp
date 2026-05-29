@@ -100,7 +100,7 @@ async def padron_auth() -> tuple[str, str]:
 class TestGetVoucherTypesE2E:
     """E2E: get_voucher_types contra WSFEv1 homologación."""
 
-    def test_returns_non_empty_list(self, wsfe_auth):
+    async def test_returns_non_empty_list(self, wsfe_auth):
         """WSFEv1 debe retornar al menos un tipo de comprobante."""
         if not _has_cuit:
             pytest.skip("ARCA_TEST_CUIT no seteado")
@@ -111,7 +111,7 @@ class TestGetVoucherTypesE2E:
         )
         assert len(result) > 0, "La lista de tipos de comprobante está vacía"
 
-    def test_factura_a_present(self, wsfe_auth):
+    async def test_factura_a_present(self, wsfe_auth):
         """Factura A (id='1') debe estar en el catálogo."""
         if not _has_cuit:
             pytest.skip("ARCA_TEST_CUIT no seteado")
@@ -123,7 +123,7 @@ class TestGetVoucherTypesE2E:
         ids = {item.id for item in result}
         assert "1" in ids, f"Factura A (id=1) no encontrada en el catálogo: {ids}"
 
-    def test_factura_b_present(self, wsfe_auth):
+    async def test_factura_b_present(self, wsfe_auth):
         """Factura B (id='6') debe estar en el catálogo."""
         if not _has_cuit:
             pytest.skip("ARCA_TEST_CUIT no seteado")
@@ -135,7 +135,7 @@ class TestGetVoucherTypesE2E:
         ids = {item.id for item in result}
         assert "6" in ids, f"Factura B (id=6) no encontrada en el catálogo: {ids}"
 
-    def test_each_item_has_id_and_description(self, wsfe_auth):
+    async def test_each_item_has_id_and_description(self, wsfe_auth):
         """Cada tipo de comprobante debe tener id y descripción no vacíos."""
         if not _has_cuit:
             pytest.skip("ARCA_TEST_CUIT no seteado")
@@ -155,7 +155,7 @@ class TestGetTaxpayerDetailsE2E:
     Requiere además ARCA_TEST_CUIT seteado — skipea con mensaje explícito si no está.
     """
 
-    def test_known_cuit_returns_persona_details(self, padron_auth):
+    async def test_known_cuit_returns_persona_details(self, padron_auth):
         """Un CUIT conocido debe retornar PersonaDetails con datos válidos."""
         if not TEST_CUIT:
             pytest.skip(
@@ -185,7 +185,7 @@ class TestGetTaxpayerDetailsE2E:
             f"Estado inesperado: {result.status!r}"
         )
 
-    def test_invalid_cuit_returns_arca_error(self, padron_auth):
+    async def test_invalid_cuit_returns_arca_error(self, padron_auth):
         """Un CUIT inexistente debe retornar ArcaError (PADRON_NOT_FOUND o SERVICE_ERROR)."""
         if not TEST_CUIT:
             pytest.skip(
