@@ -16,16 +16,22 @@ from arca_mcp.padron import client as padron_client
 from arca_mcp.padron.models import PersonaDetails, TaxpayerStatus
 from arca_mcp.validation import catalogs
 from arca_mcp.wsfe import client as wsfe_client
+from arca_mcp.wsfe import catalog_cache
 from arca_mcp.wsfe.models import CatalogItem
 
 server = fastmcp.FastMCP("lookup")
 
 
 async def _call_wsfe_catalog(wsfe_fn: Callable) -> list[CatalogItem] | ArcaError:
-    """Pipeline config → CUIT → token WSAA → llamada WSFEv1 para consultas de catálogo."""
+    """Pipeline config → cache hit / WSAA → WSFEv1 para consultas de catálogo."""
     config = resolve_runtime_config()
     if isinstance(config, ArcaError):
         return config
+
+    cached = catalog_cache.get(wsfe_fn, config.environment)
+    if cached is not None:
+        return cached
+
     emitter_cuit = _require_emitter_cuit(config.emitter_cuit)
     if isinstance(emitter_cuit, ArcaError):
         return emitter_cuit
@@ -36,9 +42,12 @@ async def _call_wsfe_catalog(wsfe_fn: Callable) -> list[CatalogItem] | ArcaError
         return token_result
     token, sign = token_result
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(
+    result = await loop.run_in_executor(
         None, functools.partial(wsfe_fn, token, sign, config.environment, emitter_cuit)
     )
+    if not isinstance(result, ArcaError):
+        catalog_cache.set(wsfe_fn, config.environment, result)
+    return result
 
 
 @server.tool
