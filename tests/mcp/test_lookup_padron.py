@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from arca_mcp.config_settings import Environment, Settings
+from arca_mcp.config.settings import Environment, Settings
 from arca_mcp.errors import ArcaError, ArcaErrorCause
 from arca_mcp.mcp import lookup as _lookup_mod
 from arca_mcp.padron.models import FiscalAddress, PersonaDetails, TaxpayerStatus

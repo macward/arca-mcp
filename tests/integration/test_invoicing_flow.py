@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from arca_mcp.config.resolver import RuntimeConfig
-from arca_mcp.config_settings import Environment
+from arca_mcp.config.settings import Environment
 from arca_mcp.errors import ArcaErrorCause
 from arca_mcp.invoicing.draft_store import DraftStore
 from arca_mcp.invoicing.idempotency import IdempotencyStore

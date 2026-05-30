@@ -37,7 +37,7 @@ setup_doctor = _tool_fn(_setup_mod.setup_doctor)
 
 def _stub_settings(tmp_path: Path, *, cert: bool = True, key: bool = True):
     """Crea un Settings stub con paths reales en disco."""
-    from arca_mcp.config_settings import Environment, Settings
+    from arca_mcp.config.settings import Environment, Settings
 
     cert_path = tmp_path / "cert.crt"
     key_path = tmp_path / "key.pem"
@@ -61,7 +61,7 @@ class TestMissingConfigPropagation:
     """Cuando Settings no tiene paths, las tools deben retornar ArcaError MISSING_CONFIG."""
 
     def _bare_settings(self):
-        from arca_mcp.config_settings import Environment, Settings
+        from arca_mcp.config.settings import Environment, Settings
         return Settings.model_construct(
             environment=Environment.HOMOLOGACION,
             cert_path=None,

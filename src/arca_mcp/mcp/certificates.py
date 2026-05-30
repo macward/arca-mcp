@@ -13,7 +13,7 @@ from arca_mcp.certificates import validate_cert_key_match as _validate_match
 from arca_mcp.certificates import validate_certificate as _validate_cert
 from arca_mcp.certificates import validate_private_key as _validate_key
 from arca_mcp.config import ConfigOverrides, resolve_runtime_config
-from arca_mcp.config_settings import Environment
+from arca_mcp.config.settings import Environment
 from arca_mcp.errors import ArcaError
 
 server = fastmcp.FastMCP("certificates")

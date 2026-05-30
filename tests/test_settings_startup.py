@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from arca_mcp.config_settings import Environment, Settings
+from arca_mcp.config.settings import Environment, Settings
 
 
 # ---------------------------------------------------------------------------

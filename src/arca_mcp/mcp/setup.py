@@ -5,7 +5,7 @@ from __future__ import annotations
 import fastmcp
 
 from arca_mcp.config import ConfigOverrides, resolve_runtime_config
-from arca_mcp.config_settings import Environment
+from arca_mcp.config.settings import Environment
 from arca_mcp.errors import ArcaError, ArcaErrorCause
 from arca_mcp.wsaa import (
     SetupCheckResult,

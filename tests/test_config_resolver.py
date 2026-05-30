@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from arca_mcp.config import ConfigOverrides, RuntimeConfig, resolve_runtime_config
-from arca_mcp.config_settings import Environment, Settings
+from arca_mcp.config.settings import Environment, Settings
 from arca_mcp.errors import ArcaError, ArcaErrorCause
 
 

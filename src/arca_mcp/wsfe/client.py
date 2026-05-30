@@ -19,7 +19,7 @@ from typing import Union
 import zeep
 import zeep.exceptions
 
-from arca_mcp.config_settings import Environment
+from arca_mcp.config.settings import Environment
 from arca_mcp.errors import ArcaError, ArcaErrorCause
 from arca_mcp.wsfe.models import (
     CatalogItem,
