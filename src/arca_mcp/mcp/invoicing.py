@@ -629,6 +629,54 @@ async def confirm_voucher_creation(draft_id: str, idempotency_key: str) -> dict:
 
 
 @server.tool
+async def list_vouchers(
+    status: str = "CONFIRMED",
+    limit: int = 50,
+) -> list[dict] | dict:
+    """Lista comprobantes del historial local de emisión.
+
+    Consulta el store local (SQLite) — no hace llamadas a ARCA.
+
+    Args:
+        status: Estado a filtrar. Valores válidos: CONFIRMED, PENDING, VALIDATED,
+                REJECTED, ALL. Default: CONFIRMED (comprobantes emitidos con CAE).
+        limit:  Máximo de resultados a retornar (default 50, máximo 200).
+    """
+    limit = min(max(1, limit), 200)
+
+    valid_statuses = {"CONFIRMED", "PENDING", "VALIDATED", "REJECTED", "ALL"}
+    if status not in valid_statuses:
+        return {
+            "error": {
+                "cause": "INVALID_ARGUMENT",
+                "message": f"status debe ser uno de: {', '.join(sorted(valid_statuses))}",
+            }
+        }
+
+    statuses = None if status == "ALL" else [status]
+
+    try:
+        drafts = await _draft_store.list_by_status(statuses=statuses, limit=limit)
+    except Exception as exc:
+        return {"error": {"cause": "INTERNAL_ERROR", "message": str(exc)}}
+
+    return [
+        {
+            "draft_id": d.draft_id,
+            "status": d.status.value,
+            "cbte_tipo": d.cbte_tipo,
+            "punto_venta": d.punto_venta,
+            "fecha_cbte": d.fecha_cbte,
+            "cuit_receptor": d.cuit_receptor,
+            "imp_total": str(d.imp_total),
+            "created_at": d.created_at.isoformat(),
+            "updated_at": d.updated_at.isoformat(),
+        }
+        for d in drafts
+    ]
+
+
+@server.tool
 async def validate_voucher_draft(draft_id: str) -> dict:
     """Valida un borrador de comprobante contra las reglas de política fiscal.
 

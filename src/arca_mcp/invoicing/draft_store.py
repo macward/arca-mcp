@@ -186,6 +186,35 @@ class DraftStore:
             ).fetchall()
         return [VoucherDraft.model_validate_json(row[0]) for row in rows]
 
+    async def list_by_status(
+        self,
+        statuses: list[str] | None = None,
+        limit: int = 50,
+    ) -> list[VoucherDraft]:
+        """Return drafts filtered by status, ordered by created_at DESC.
+
+        Parameters
+        ----------
+        statuses:
+            List of DraftStatus values to include. None means all statuses.
+        limit:
+            Maximum number of results to return.
+        """
+        with self._lock:
+            if statuses:
+                placeholders = ",".join("?" * len(statuses))
+                rows = self._conn.execute(
+                    f"SELECT data_json FROM drafts WHERE status IN ({placeholders}) "
+                    f"ORDER BY created_at DESC LIMIT ?",
+                    (*statuses, limit),
+                ).fetchall()
+            else:
+                rows = self._conn.execute(
+                    "SELECT data_json FROM drafts ORDER BY created_at DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+        return [VoucherDraft.model_validate_json(row[0]) for row in rows]
+
     async def clear(self) -> None:
         """Remove all drafts from the store (useful for tests)."""
         with self._lock:
