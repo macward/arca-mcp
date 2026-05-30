@@ -229,6 +229,17 @@ ARCA_TEST_CERT_PATH=/certs/homo.crt ARCA_TEST_KEY_PATH=/certs/homo.key pytest -m
 
 ---
 
+## Tutoriales
+
+| # | Tema |
+|---|---|
+| 1 | [Setup inicial — instalación, certificados y setup_doctor](docs/tutorials/01-setup.md) |
+| 2 | [Emitir una factura — flujo completo draft → validate → confirm](docs/tutorials/02-emitir-factura.md) |
+| 3 | [Consultas al padrón — datos y estado fiscal del contribuyente](docs/tutorials/03-padron.md) |
+| 4 | [Integración con Claude Desktop — configuración paso a paso](docs/tutorials/04-claude-desktop.md) |
+
+---
+
 ## Changelog
 
 Ver [CHANGELOG.md](CHANGELOG.md).
