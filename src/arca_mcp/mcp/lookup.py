@@ -177,10 +177,21 @@ async def validate_taxpayer_status(cuit: str) -> TaxpayerStatus | ArcaError:
     )
     if isinstance(persona_result, ArcaError):
         return persona_result
+
+    _ACTIVE_STATUSES = {"ACTIVO"}
+    _STATUS_LABELS: dict[str, str] = {
+        "ACTIVO": "Activo",
+        "INACTIVO": "Inactivo",
+        "CANCELADO": "Cancelado por AFIP",
+        "BLOQUEADO": "Bloqueado",
+        "CLAUSURADO": "Clausurado",
+    }
+    raw = persona_result.status
+    label = _STATUS_LABELS.get(raw, raw)
     return TaxpayerStatus(
         cuit=persona_result.cuit,
-        active=persona_result.status == "ACTIVO",
-        status_description=persona_result.status,
+        active=raw in _ACTIVE_STATUSES,
+        status_description=label,
     )
 
 

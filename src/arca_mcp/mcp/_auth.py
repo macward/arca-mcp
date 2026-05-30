@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from arca_mcp.errors import ArcaError, ArcaErrorCause
 from arca_mcp.wsaa import WsaaEnvironment, validate_wsaa_login
 from arca_mcp.wsaa.models import SetupCheckResult
@@ -13,8 +15,8 @@ _ENV_MAP = {
 
 
 async def get_wsaa_token(
-    cert_path,
-    key_path,
+    cert_path: Path,
+    key_path: Path,
     environment: str,
     service: str,
     cuit: str | None = None,

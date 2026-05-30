@@ -228,7 +228,7 @@ class TestValidateTaxpayerStatusHappyPath:
         assert isinstance(result, TaxpayerStatus)
         assert result.cuit == "20123456789"
         assert result.active is True
-        assert result.status_description == "ACTIVO"
+        assert result.status_description == "Activo"
 
     @pytest.mark.asyncio
     async def test_returns_active_false_for_inactivo(self, tmp_path):
@@ -242,7 +242,7 @@ class TestValidateTaxpayerStatusHappyPath:
         assert isinstance(result, TaxpayerStatus)
         assert result.cuit == "20999999990"
         assert result.active is False
-        assert result.status_description == "INACTIVO"
+        assert result.status_description == "Inactivo"
 
     @pytest.mark.asyncio
     async def test_returns_active_false_for_unknown_status(self, tmp_path):
