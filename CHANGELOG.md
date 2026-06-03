@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-06-03
+
 ### Removed
 - Módulos de caché WSAA superseded por `WsaaCache` (0.6.0): se eliminan `wsaa/token_cache.py` (`TokenCache`) y `wsaa/token_store.py`, que ya no eran importados por ningún módulo de `src/` (solo por tests). −620 LOC netas, sin cambios de API pública
 
