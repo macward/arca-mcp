@@ -29,7 +29,7 @@ from arca_mcp.wsfe.models import FECAESolicitarRequest, FECAESolicitarResponse, 
 
 server = fastmcp.FastMCP("invoicing")
 
-# Module-level singletons — same pattern as TokenCache in wsaa.
+# Module-level singletons — same pattern as WsaaCache in wsaa.
 _draft_store = DraftStore(
     db_path=Path.home() / ".arca-mcp" / "drafts.db"
 )

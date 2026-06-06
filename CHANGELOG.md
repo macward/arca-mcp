@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-06-03
+
+### Removed
+- Módulos de caché WSAA superseded por `WsaaCache` (0.6.0): se eliminan `wsaa/token_cache.py` (`TokenCache`) y `wsaa/token_store.py`, que ya no eran importados por ningún módulo de `src/` (solo por tests). −620 LOC netas, sin cambios de API pública
+
+### Changed
+- Cobertura de `WsaaCache` consolidada en `tests/test_wsaa_cache.py`: la verificación de permisos 0600 del archivo de token ahora tiene un test **no-e2e** (antes solo existía en tests e2e que se skipean sin credenciales)
+
 ## [0.6.0] - 2026-05-28
 
 ### Added

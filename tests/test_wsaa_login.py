@@ -4,7 +4,6 @@ import httpx
 import pytest
 
 from arca_mcp.errors import ArcaErrorCause
-from arca_mcp.wsaa import token_store
 from arca_mcp.wsaa.login import validate_wsaa_login
 from arca_mcp.wsaa.models import WsaaToken
 from arca_mcp.wsaa.wsaa_cache import WsaaCache
@@ -21,13 +20,6 @@ SUCCESS_RESPONSE = """<?xml version="1.0"?>
     <sign>SIGN456</sign>
   </credentials>
 </loginTicketResponse>"""
-
-
-@pytest.fixture(autouse=True)
-def clean_token_store():
-    token_store.clear_store()
-    yield
-    token_store.clear_store()
 
 
 @pytest.mark.asyncio
