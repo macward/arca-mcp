@@ -19,10 +19,14 @@ CSS de Starlight — sin Tailwind ni dependencias de UI externas.
 ```bash
 cd docs-site
 npm install
-npm run dev      # servidor local en http://localhost:4321
+npm run dev      # servidor local en http://localhost:4330
 npm run build    # build estático a dist/
-npm run preview  # sirve el build de dist/
+npm run preview  # sirve el build de dist/ en http://localhost:4330
 ```
+
+> El proyecto usa el puerto **4330** (fijado en `package.json`) para no colisionar
+> con otros dev servers de Astro corriendo en la máquina (que ocuparían el 4321 por
+> defecto y mostrarían otro sitio).
 
 ## Estructura
 
