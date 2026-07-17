@@ -50,6 +50,32 @@ class ConfigOverrides(BaseModel):
     environment: Environment | None = None
 
 
+def _resolve_path_field(
+    field_name: str,
+    override: Path | None,
+    default: Path | None,
+) -> Union[Path, ArcaError]:
+    """Resuelve un path (override → Settings) y valida que esté configurado y exista.
+
+    Retorna el Path resuelto, o un ArcaError MISSING_CONFIG si falta o no existe.
+    """
+    path = override if override is not None else default
+    if path is None:
+        return ArcaError(
+            cause=ArcaErrorCause.MISSING_CONFIG,
+            message=(
+                f"{field_name} no está configurado. "
+                f"Definir ARCA_{field_name.upper()} en el entorno o pasar {field_name} como override."
+            ),
+        )
+    if not path.exists():
+        return ArcaError(
+            cause=ArcaErrorCause.MISSING_CONFIG,
+            message=f"{field_name} no existe en el filesystem: {path}",
+        )
+    return path
+
+
 def resolve_runtime_config(
     overrides: ConfigOverrides | None = None,
     *,
@@ -106,45 +132,14 @@ def resolve_runtime_config(
             ),
         )
 
-    # --- Resolver cert_path ---
-    if ov.cert_path is not None:
-        cert_path = ov.cert_path
-    elif settings.cert_path is not None:
-        cert_path = settings.cert_path
-    else:
-        return ArcaError(
-            cause=ArcaErrorCause.MISSING_CONFIG,
-            message=(
-                "cert_path no está configurado. "
-                "Definir ARCA_CERT_PATH en el entorno o pasar cert_path como override."
-            ),
-        )
+    # --- Resolver y validar cert_path / key_path (override → Settings, debe existir) ---
+    cert_path = _resolve_path_field("cert_path", ov.cert_path, settings.cert_path)
+    if isinstance(cert_path, ArcaError):
+        return cert_path
 
-    # --- Resolver key_path ---
-    if ov.key_path is not None:
-        key_path = ov.key_path
-    elif settings.key_path is not None:
-        key_path = settings.key_path
-    else:
-        return ArcaError(
-            cause=ArcaErrorCause.MISSING_CONFIG,
-            message=(
-                "key_path no está configurado. "
-                "Definir ARCA_KEY_PATH en el entorno o pasar key_path como override."
-            ),
-        )
-
-    # --- Validar que los paths existen ---
-    if not cert_path.exists():
-        return ArcaError(
-            cause=ArcaErrorCause.MISSING_CONFIG,
-            message=f"cert_path no existe en el filesystem: {cert_path}",
-        )
-    if not key_path.exists():
-        return ArcaError(
-            cause=ArcaErrorCause.MISSING_CONFIG,
-            message=f"key_path no existe en el filesystem: {key_path}",
-        )
+    key_path = _resolve_path_field("key_path", ov.key_path, settings.key_path)
+    if isinstance(key_path, ArcaError):
+        return key_path
 
     # --- Resolver emitter_cuit (opcional) ---
     emitter_cuit = ov.emitter_cuit if ov.emitter_cuit is not None else settings.cuit

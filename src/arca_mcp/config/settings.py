@@ -20,7 +20,3 @@ class Settings(BaseSettings):
 
     # CUIT del emisor
     cuit: str | None = None
-
-    @property
-    def is_production(self) -> bool:
-        return self.environment == Environment.PRODUCCION
