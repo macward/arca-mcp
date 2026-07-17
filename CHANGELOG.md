@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `resolve_runtime_config`: la resolución y validación de `cert_path`/`key_path` (override → Settings, debe existir en el filesystem) se extrae al helper reutilizable `_resolve_path_field`, eliminando la duplicación
+
+### Removed
+- `Settings.is_production` — property sin uso en el codebase
+
 ## [0.6.1] - 2026-06-03
 
 ### Removed
