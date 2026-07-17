@@ -1,0 +1,51 @@
+---
+title: Human in the Loop
+description: Por qué la emisión pasa por draft → validate → confirm, y cómo funciona la idempotencia.
+---
+
+import FlowStepper from '../../../components/FlowStepper.svelte';
+import { Aside } from '@astrojs/starlight/components';
+
+Emitir un comprobante es **irreversible**: un comprobante rechazado o duplicado genera
+huecos o inconsistencias en la numeración que traen problemas contables. Por eso
+arca-mcp nunca emite directamente.
+
+## El flujo de tres pasos
+
+<FlowStepper client:load />
+
+- **`create_voucher_draft`** — persiste un borrador local (SQLite) en estado `PENDING`.
+  Nada se envía a ARCA.
+- **`validate_voucher_draft`** — corre las reglas de política fiscal. Si pasa, el draft
+  queda `VALIDATED`. Sigue sin emitir.
+- **`confirm_voucher_creation`** — recién acá se solicita el CAE a WSFE. Requiere un
+  draft en estado `VALIDATED` y una `idempotency_key`.
+
+No existe atajo: `confirm_voucher_creation` rechaza cualquier draft que no esté
+`VALIDATED`.
+
+## Idempotencia
+
+`confirm_voucher_creation` recibe una `idempotency_key` única por operación. El estado
+se registra en `idempotency.db` **antes** de llamar a WSFE (write-ahead-log):
+
+1. Se marca la key como `PENDING` y se escribe una entrada `PENDING_CAE` en el audit log.
+2. Se llama `FECAESolicitar`.
+3. Con el CAE en mano, la key pasa a `CONFIRMED` y el audit log a `CAE_CONFIRMED`.
+
+Si el proceso muere entre 2 y 3, al reintentar con la **misma key** no se vuelve a
+emitir: el estado persistido lo impide. Si el error de WSFE fue transitorio, la key se
+libera para permitir un retry limpio.
+
+<Aside type="tip">
+  Usá una `idempotency_key` estable y derivada de tu operación de negocio (p. ej.
+  `factura-cliente-abc-042`), no un valor aleatorio por intento. Así los reintentos
+  colapsan sobre la misma emisión.
+</Aside>
+
+## Qué significa para un agente
+
+Cuando un LLM opera arca-mcp (p. ej. vía Claude Desktop), el modelo puede armar y
+validar el borrador solo, pero el paso `confirm_voucher_creation` es el punto donde el
+humano aprueba. El diseño mantiene al humano en el eje irreversible sin frenar el
+trabajo reversible previo.

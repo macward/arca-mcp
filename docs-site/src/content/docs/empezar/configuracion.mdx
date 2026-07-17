@@ -1,0 +1,57 @@
+---
+title: Configuración
+description: Variables de entorno y certificados de arca-mcp.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+arca-mcp se configura con **variables de entorno** (prefijo `ARCA_`) o un archivo
+`.env` en la raíz del proyecto. El ambiente es siempre **explícito**, nunca inferido.
+
+## Variables de entorno
+
+| Variable | Requerida | Default | Descripción |
+|---|---|---|---|
+| `ARCA_CERT_PATH` | Sí | — | Path absoluto al certificado `.crt` |
+| `ARCA_KEY_PATH` | Sí | — | Path absoluto a la clave privada `.key` |
+| `ARCA_CUIT` | Sí* | — | CUIT del emisor (11 dígitos, sin guiones) |
+| `ARCA_ENVIRONMENT` | No | `homologacion` | `homologacion` o `produccion` |
+| `ARCA_AUDIT_LOG_PATH` | No | `~/.arca-mcp/audit/audit.jsonl` | Ubicación del audit log |
+| `MCP_TRANSPORT` | No | `stdio` | `stdio` o `http` |
+| `ARCA_HTTP_HOST` | No | `127.0.0.1` | Host cuando `MCP_TRANSPORT=http` |
+| `ARCA_HTTP_PORT` | No | `8000` | Puerto cuando `MCP_TRANSPORT=http` |
+| `ARCA_API_KEY` | No | — | Si se setea, protege el transporte HTTP |
+
+<Aside type="note">
+  `ARCA_CUIT` es requerida para las tools que consultan padrón o WSFE (catálogos,
+  emisión). Las tools de certificados y algunas validaciones locales funcionan sin ella.
+</Aside>
+
+## Ejemplo de `.env`
+
+```ini
+ARCA_CERT_PATH=/ruta/absoluta/homo.crt
+ARCA_KEY_PATH=/ruta/absoluta/homo.key
+ARCA_CUIT=20123456789
+ARCA_ENVIRONMENT=homologacion
+```
+
+## Resolución de configuración
+
+Casi todas las tools resuelven `cert_path` / `key_path` en este orden:
+
+1. **Override explícito** pasado como argumento de la tool (p. ej. `validate_certificate(cert_path=…)`).
+2. **Settings** desde el entorno (`ARCA_CERT_PATH`, `ARCA_KEY_PATH`).
+
+Si el path falta o no existe en el filesystem, la tool retorna un error
+`MISSING_CONFIG` con un mensaje explícito. Los overrides `cert_path` y `key_path`
+deben pasarse **juntos o ninguno**.
+
+<Aside type="caution" title="Seguridad de las credenciales">
+  La clave privada nunca se expone al LLM ni aparece en las respuestas MCP. La firma
+  CMS y el login WSAA ocurren siempre localmente. Ver [Seguridad](/conceptos/seguridad/).
+</Aside>
+
+## Siguiente paso
+
+Con la configuración lista, verificá todo de una con el [Quickstart](/empezar/quickstart/).

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Sitio de documentación de uso en `docs-site/` (Astro + Starlight + Svelte 5): guías, conceptos y referencia completa de las 25 tools MCP, con 3 componentes Svelte interactivos (stepper del flujo de emisión, tabla filtrable de tools, comparador de ambientes)
+
 ### Changed
 - `resolve_runtime_config`: la resolución y validación de `cert_path`/`key_path` (override → Settings, debe existir en el filesystem) se extrae al helper reutilizable `_resolve_path_field`, eliminando la duplicación
 

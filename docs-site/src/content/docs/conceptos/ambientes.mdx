@@ -1,0 +1,45 @@
+---
+title: Ambientes
+description: Homologación y producción son ambientes estrictamente separados.
+---
+
+import EnvComparison from '../../../components/EnvComparison.svelte';
+import { Aside } from '@astrojs/starlight/components';
+
+ARCA mantiene dos ambientes completamente separados. arca-mcp los trata como tales: el
+ambiente es **siempre explícito** vía `ARCA_ENVIRONMENT`, nunca inferido, y la lógica
+de homologación y producción no se mezcla en el mismo módulo.
+
+<EnvComparison client:load />
+
+## Homologación
+
+- Certificados **"Computadores Test"** emitidos por la CA de homologación.
+- **Sin impacto fiscal real** — ideal para desarrollo, pruebas y CI.
+- Habilitado desde la v0.1.
+
+## Producción
+
+- Certificados **productivos**.
+- Operaciones **irreversibles** con efecto fiscal real.
+- Planificado para la **v1.0**.
+
+<Aside type="caution">
+  Nunca reutilices un certificado de homologación en producción ni viceversa. Los
+  endpoints WSAA y los certificados son distintos, y cruzarlos produce fallos de
+  autenticación (`WSAA_AUTH_FAILED`) en el mejor caso.
+</Aside>
+
+## Cómo se setea
+
+```ini
+# Desarrollo / pruebas
+ARCA_ENVIRONMENT=homologacion
+
+# Producción (v1.0)
+ARCA_ENVIRONMENT=produccion
+```
+
+Todas las tools de red aceptan además un override `environment` por llamada
+(`"homologacion"` o `"produccion"`), útil para diagnósticos puntuales sin cambiar la
+configuración global.

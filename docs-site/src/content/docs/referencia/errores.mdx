@@ -1,0 +1,74 @@
+---
+title: Errores
+description: El modelo ArcaError y todas las causas posibles.
+---
+
+Los errores opacos de ARCA se transforman en una estructura legible y estable. Toda
+tool que puede fallar retorna un `ArcaError` en lugar de lanzar excepciones crípticas.
+
+## Modelo `ArcaError`
+
+```json
+{
+  "cause": "MISSING_CONFIG",
+  "message": "cert_path no está configurado. Definir ARCA_CERT_PATH en el entorno…"
+}
+```
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `cause` | `str` (enum) | Causa estable, apta para lógica de control |
+| `message` | `str` | Descripción legible del problema |
+
+Usá `cause` para ramificar en tu código y `message` para mostrar al usuario.
+
+## Causas
+
+### Certificados
+
+| `cause` | Significado |
+|---|---|
+| `CERT_INVALID` | El certificado no es parseable |
+| `CERT_EXPIRED` | El certificado está vencido |
+| `CERT_NOT_YET_VALID` | El certificado aún no entró en vigencia |
+| `CERT_KEY_MISMATCH` | El certificado no corresponde a la private key |
+| `KEY_INVALID` | La private key no es parseable o está corrupta |
+
+### WSAA (autenticación)
+
+| `cause` | Significado |
+|---|---|
+| `WSAA_UNREACHABLE` | No se pudo alcanzar el endpoint WSAA |
+| `WSAA_AUTH_FAILED` | Falló la autenticación (token/firma inválidos) |
+| `WSAA_TA_ALREADY_VALID` | Ya existe un Ticket de Acceso válido vigente |
+
+### Servicios y configuración
+
+| `cause` | Significado |
+|---|---|
+| `SERVICE_UNAUTHORIZED` | El certificado no tiene acceso autorizado al servicio |
+| `MISSING_CONFIG` | Falta una variable de configuración o un path no existe |
+| `INVALID_CONFIG_OVERRIDE` | Override de configuración inválido |
+| `UNSUPPORTED_ENVIRONMENT` | Ambiente no soportado |
+
+### WSFEv1, padrón y facturación
+
+| `cause` | Significado |
+|---|---|
+| `ARCA_SERVICE_ERROR` | Error de red o SOAP contra ARCA |
+| `INVALID_CATALOG_VALUE` | Valor de catálogo inválido (tipo, alícuota, etc.) |
+| `PADRON_NOT_FOUND` | El CUIT no existe en el padrón |
+| `INVALID_CAE` | El CAE provisto no es válido (14 dígitos numéricos) |
+
+## Errores de flujo (facturación)
+
+Además del `ArcaError`, algunas tools de facturación retornan errores de flujo con su
+propio `cause` en `{ "error": { "cause", "message" } }`:
+
+| `cause` | Tool | Significado |
+|---|---|---|
+| `DRAFT_NOT_FOUND` | `validate_voucher_draft`, `confirm_voucher_creation` | El `draft_id` no existe |
+| `DRAFT_INVALID_STATUS` | `validate_voucher_draft`, `confirm_voucher_creation` | El draft no está en el estado requerido |
+| `EMISSION_IN_PROGRESS` | `confirm_voucher_creation` | Ya hay una emisión en curso con esa `idempotency_key` |
+| `INVALID_ARGUMENT` | `list_vouchers` | Argumento fuera del dominio válido |
+| `INTERNAL_ERROR` | varias | Error inesperado en el store local |

@@ -1,0 +1,47 @@
+/* Paleta arca-mcp — acento celeste/azul institucional, neutro y accesible. */
+:root {
+  --sl-color-accent-low: #10243e;
+  --sl-color-accent: #1d6fd6;
+  --sl-color-accent-high: #b9d7ff;
+
+  --arca-radius: 0.6rem;
+  --arca-homo: #2e7d32;
+  --arca-homo-bg: #e7f4e8;
+  --arca-prod: #b3261e;
+  --arca-prod-bg: #fbe9e7;
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #c7ddff;
+  --sl-color-accent: #1a5fbf;
+  --sl-color-accent-high: #0d2b52;
+}
+
+/* Hero de la home un poco más contenido */
+.hero > img,
+.hero > .hero-html {
+  max-width: 12rem;
+}
+
+/* Cards de tools: pequeñas mejoras sobre el <Card> de Starlight cuando se usa markdown */
+.arca-badge {
+  display: inline-block;
+  font-size: var(--sl-text-xs);
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  line-height: 1.4;
+  vertical-align: middle;
+}
+.arca-badge--local {
+  color: var(--sl-color-accent);
+  background: var(--sl-color-accent-low);
+}
+.arca-badge--net {
+  color: #8a5a00;
+  background: #fff3d6;
+}
+:root[data-theme='dark'] .arca-badge--net {
+  color: #ffd479;
+  background: #3a2e12;
+}

@@ -1,0 +1,83 @@
+---
+title: Consultas al padrón
+description: Consultar contribuyentes de ARCA con el servicio ws_sr_padron_a4.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+arca-mcp expone dos tools para consultar el padrón de contribuyentes de ARCA usando el
+servicio `ws_sr_padron_a4`, más tres validaciones locales sin red.
+
+<Aside type="note">
+  Prerequisito: [Setup y certificados](/guias/setup/). No necesitás `wsfe` autorizado;
+  el padrón usa un servicio distinto. Autorizá `ws_sr_padron_a4` en **Administración de
+  Relaciones** del portal ARCA.
+</Aside>
+
+## `get_taxpayer_details` — Datos completos
+
+Retorna el detalle fiscal de un CUIT: denominación, estado, domicilio fiscal y
+actividades.
+
+```json
+{ "tool": "get_taxpayer_details", "arguments": { "cuit": "20123456789" } }
+```
+
+```json
+{
+  "cuit": "20123456789",
+  "denomination": "ACME S.A.",
+  "status": "ACTIVO",
+  "fiscal_address": {
+    "street": "Av. Corrientes", "number": "1234",
+    "city": "Ciudad Autónoma de Buenos Aires"
+  },
+  "activities": ["620100", "620200"]
+}
+```
+
+| Campo | Descripción |
+|---|---|
+| `cuit` | CUIT consultado |
+| `denomination` | Razón social o nombre y apellido |
+| `status` | `ACTIVO`, `INACTIVO`, `CANCELADO`, `BLOQUEADO`, `CLAUSURADO` |
+| `fiscal_address` | Domicilio fiscal (puede ser `null`) |
+| `activities` | Códigos de actividad CLAE declarados |
+
+## `validate_taxpayer_status` — Verificación rápida
+
+Útil para validar que un receptor está activo antes de facturarle. Retorna un booleano
+en lugar de un string a parsear.
+
+```json
+{ "tool": "validate_taxpayer_status", "arguments": { "cuit": "20123456789" } }
+```
+
+```json
+{ "cuit": "20123456789", "active": true, "status_description": "Activo" }
+```
+
+## Validaciones locales (sin red)
+
+Estas tools operan offline contra catálogos locales y no consumen cuota de ARCA:
+
+```json
+{ "tool": "validate_invoice_type", "arguments": { "invoice_type": "6" } }
+{ "tool": "validate_vat_condition", "arguments": { "vat_condition": "1" } }
+{ "tool": "validate_currency", "arguments": { "currency": "DOL" } }
+```
+
+Cada una responde `{ "<campo>": "<valor>", "valid": true|false }`.
+
+## Errores frecuentes
+
+| Causa | Descripción | Acción |
+|---|---|---|
+| `PADRON_NOT_FOUND` | El CUIT no existe en el padrón | Verificar el CUIT |
+| `WSAA_AUTH_FAILED` | Error de autenticación WSAA | Revisar cert y autorización de `ws_sr_padron_a4` |
+| `MISSING_CONFIG` | Variables sin configurar | Verificar `ARCA_CERT_PATH`, `ARCA_KEY_PATH`, `ARCA_CUIT` |
+| `ARCA_SERVICE_ERROR` | Error de red o SOAP | Verificar conectividad y estado de ARCA |
+
+## Siguiente paso
+
+Conectá arca-mcp con [Claude Desktop](/guias/claude-desktop/).

@@ -1,0 +1,48 @@
+---
+title: Qué es arca-mcp
+description: Introducción al servidor MCP para operaciones fiscales ARCA/AFIP.
+---
+
+**arca-mcp** es un servidor [MCP](https://modelcontextprotocol.io) que expone las
+operaciones fiscales de ARCA/AFIP como herramientas deterministas: diagnóstico de
+certificados, autenticación WSAA, consulta de catálogos y padrón, y emisión de
+comprobantes electrónicos con un flujo Human-in-the-Loop.
+
+## El wedge
+
+El objetivo no es "AI para impuestos", sino **hacer usable ARCA para developers y
+agentes**. Los servicios de ARCA son SOAP heredado, con errores crípticos y una
+separación estricta entre ambientes. arca-mcp los normaliza detrás de una superficie
+MCP limpia.
+
+## Qué expone
+
+El servidor monta cuatro grupos de tools:
+
+| Grupo | Para qué sirve | Requiere red |
+|---|---|---|
+| **Setup** | Diagnóstico WSAA y autorización de servicios | Sí |
+| **Certificados** | Validar e inspeccionar X509 y private key | No |
+| **Catálogos y padrón** | Tipos de comprobante, alícuotas, consulta de contribuyentes | Mixto |
+| **Facturación** | Flujo draft → validate → confirm, QR y PDF | Mixto |
+
+Ver la [referencia completa de tools](/referencia/tools/).
+
+## Principios de diseño
+
+- **Determinismo** — inputs y outputs estructurados, sin inferencias ocultas.
+- **Human in the Loop** — lo irreversible pasa por confirmación explícita.
+- **Seguridad** — la private key nunca llega al LLM; todo lo sensible ocurre local.
+- **Idempotencia** — cada emisión lleva `idempotency_key` para evitar doble facturación.
+
+Cada uno se desarrolla en [Conceptos](/conceptos/arquitectura/).
+
+## Requisitos
+
+- Python 3.12+
+- Certificado digital ARCA (`.crt`) y clave privada (`.key`)
+- CUIT del emisor habilitado para el servicio `wsfe`
+
+## Siguiente paso
+
+Continuá con la [Instalación](/empezar/instalacion/).

@@ -1,0 +1,107 @@
+---
+title: Setup y certificados
+description: Instalar arca-mcp, obtener certificados de homologación y verificar con setup_doctor.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+Esta guía cubre la obtención de certificados de homologación y la verificación del
+setup con `setup_doctor`. Asume que ya [instalaste](/empezar/instalacion/) arca-mcp.
+
+## Obtener certificados de homologación
+
+ARCA tiene un ambiente de pruebas separado del productivo. Para usarlo necesitás un
+certificado emitido por la CA de homologación.
+
+<Steps>
+
+1. **Generar la clave privada y el CSR**
+
+   ```bash
+   # Clave privada RSA 2048
+   openssl genrsa -out homo.key 2048
+
+   # CSR (Certificate Signing Request)
+   openssl req -new -key homo.key -out homo.csr \
+     -subj "/C=AR/O=MiEmpresa/CN=MiServicio/serialNumber=CUIT 20123456789"
+   ```
+
+   Reemplazá `20123456789` con tu CUIT real (sin guiones).
+
+2. **Solicitar el certificado en el portal ARCA**
+
+   - Ingresá a [https://homo.afip.gob.ar](https://homo.afip.gob.ar) con tu CUIT y clave fiscal.
+   - Navegá a **Administración de Certificados Digitales**.
+   - Pegá el contenido de `homo.csr` en el campo de solicitud.
+   - Descargá el certificado emitido y guardalo como `homo.crt`.
+
+3. **Autorizar el servicio `wsfe`**
+
+   En **Administración de Relaciones**, autorizá el servicio `wsfe` para el
+   certificado que acabás de crear. Para el padrón, autorizá también `ws_sr_padron_a4`.
+
+</Steps>
+
+## Configurar variables de entorno
+
+Creá un `.env` en la raíz del proyecto:
+
+```ini
+ARCA_CERT_PATH=/ruta/absoluta/homo.crt
+ARCA_KEY_PATH=/ruta/absoluta/homo.key
+ARCA_CUIT=20123456789
+ARCA_ENVIRONMENT=homologacion
+```
+
+Ver todas las opciones en [Configuración](/empezar/configuracion/).
+
+## Verificar con `setup_doctor`
+
+Iniciá el servidor y llamá a la tool:
+
+```bash
+uv run arca-mcp
+```
+
+```json
+{ "tool": "setup_doctor" }
+```
+
+Una respuesta exitosa luce así:
+
+```json
+{
+  "checks": [
+    { "name": "private_key", "ok": true },
+    { "name": "certificate", "ok": true, "subject": "...", "expires": "2027-01-01" },
+    { "name": "cert_key_match", "ok": true },
+    { "name": "wsaa_login", "ok": true },
+    { "name": "service_authorization", "ok": true }
+  ],
+  "failed_check": null
+}
+```
+
+`setup_doctor` corre los checks en secuencia: `private_key → certificate →
+cert_key_match → wsaa_login → service_authorization`. Si uno falla, los siguientes
+quedan `skipped` y `failed_check` apunta al primero.
+
+## Problemas frecuentes
+
+| Síntoma | Causa probable | Solución |
+|---|---|---|
+| `MISSING_CONFIG` | Variable de entorno no seteada o path inexistente | Revisá el `.env` y que el path exista |
+| `WSAA_AUTH_FAILED` | Certificado vencido o key incorrecta | Regenerar cert o verificar que key y cert correspondan |
+| `CERT_KEY_MISMATCH` | Key de otro certificado | Regenerar el CSR con la key correcta |
+| `SERVICE_UNAUTHORIZED` | Servicio no autorizado para el cert | Autorizar `wsfe`/`ws_sr_padron_a4` en el portal |
+| Certificado rechazado en el portal | CN o serialNumber incorrecto | El `serialNumber` debe ser exactamente `CUIT 20XXXXXXXXX` |
+
+<Aside type="tip">
+  Podés diagnosticar los certificados sin red usando las tools de
+  [certificados](/referencia/certificados/): `validate_certificate`,
+  `validate_private_key`, `validate_cert_key_match` e `inspect_certificate`.
+</Aside>
+
+## Siguiente paso
+
+Con el setup en verde, seguí con [Emitir una factura](/guias/emitir-factura/).

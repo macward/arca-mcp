@@ -1,0 +1,115 @@
+---
+title: Tools de Facturación
+description: Flujo draft → validate → confirm, consultas WSFE, QR y PDF.
+---
+
+import FlowStepper from '../../../components/FlowStepper.svelte';
+import { Aside } from '@astrojs/starlight/components';
+
+El núcleo de la emisión. El flujo Human-in-the-Loop es obligatorio:
+
+<FlowStepper client:load />
+
+## `create_voucher_draft`
+
+Crea un borrador local (SQLite, estado `PENDING`). No genera nada fiscal.
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `cbte_tipo` | `int` | Tipo de comprobante (6 = Factura B, 1 = A, 11 = C) |
+| `punto_venta` | `int` | Punto de venta habilitado (1–9999) |
+| `fecha_cbte` | `str` | Fecha `YYYYMMDD` |
+| `cuit_receptor` | `str` | CUIT del receptor sin guiones (11 dígitos) |
+| `doc_tipo` | `int` | Documento receptor (80=CUIT, 86=CUIL, 96=DNI, 99=Consumidor Final) |
+| `imp_neto` | `str` | Importe neto gravado como string (→ Decimal interno) |
+| `alicuota_id` | `str` | Alícuota IVA (`"5"` = 21%) |
+
+Retorna `{ draft_id, status, imp_neto, imp_iva, imp_total, created_at }` o `ArcaError`.
+
+## `validate_voucher_draft`
+
+Valida un draft `PENDING` contra la política fiscal. Si pasa, queda `VALIDATED`; si no,
+permanece `PENDING` con el detalle de las violaciones.
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `draft_id` | `str` | UUID del draft a validar |
+
+Retorna `{ is_valid, status, errors }`. Errores posibles: `DRAFT_NOT_FOUND`,
+`DRAFT_INVALID_STATUS`, `INTERNAL_ERROR`.
+
+## `confirm_voucher_creation`
+
+<Aside type="caution">
+  Único paso con efecto fiscal. Solicita el CAE a WSFE (`FECAESolicitar`) y registra la
+  operación en el audit log. Requiere un draft `VALIDATED` y una `idempotency_key`.
+</Aside>
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `draft_id` | `str` | UUID del draft (debe estar `VALIDATED`) |
+| `idempotency_key` | `str` | Clave única para evitar doble emisión |
+
+Retorna `{ cae, cbte_nro, cae_fch_vto, status }` o un error
+(`EMISSION_IN_PROGRESS`, `WSFE_REJECTED`, `DRAFT_INVALID_STATUS`…). Ver
+[Human in the Loop](/conceptos/human-in-the-loop/#idempotencia).
+
+## `get_last_voucher_number`
+
+Último número autorizado para un punto de venta y tipo. Config del entorno.
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `punto_venta` | `int` | Punto de venta |
+| `cbte_tipo` | `int` | Tipo de comprobante |
+
+Retorna `{ cbte_nro }`.
+
+## `get_voucher_info`
+
+Datos de un comprobante ya registrado en WSFEv1 (CAE, fechas, importes, receptor).
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `punto_venta` | `int` | Punto de venta del comprobante |
+| `cbte_tipo` | `int` | Tipo de comprobante |
+| `cbte_nro` | `int` | Número del comprobante |
+
+## `list_vouchers`
+
+Historial local de emisión desde SQLite — **no** llama a ARCA.
+
+| Parámetro | Tipo | Default | Descripción |
+|---|---|---|---|
+| `status` | `str` | `"CONFIRMED"` | `CONFIRMED`, `PENDING`, `VALIDATED`, `REJECTED` o `ALL` |
+| `limit` | `int` | `50` | Máx. resultados (tope 200) |
+
+Retorna una lista de comprobantes con `draft_id`, `status`, importes y timestamps.
+
+## `generate_qr`
+
+Genera el QR AFIP de un comprobante confirmado. **Local puro** — sin WSAA ni cert.
+
+Parámetros: `fecha` (`YYYY-MM-DD`), `cuit`, `ptoVta`, `tipoCmp`, `nroCmp`, `importe`,
+`moneda`, `ctz`, `tipoDocRec` (80/96/99), `nroDocRec`, `codAut` (CAE de 14 dígitos).
+
+Retorna `{ qr_url, qr_png_b64 }`.
+
+## `generate_invoice_pdf_tool`
+
+Genera el PDF de la factura con el QR AFIP embebido. **Local puro**.
+
+Parámetros principales: `cbte_tipo`, `punto_venta`, `cbte_nro`, `fecha_cbte`
+(`YYYYMMDD`), `cae`, `cae_fch_vto` (`YYYYMMDD`), `imp_neto` (str), `alicuota_id`,
+`cuit_emisor`, `emisor_razon_social`, `emisor_domicilio`, `cuit_receptor`, `doc_tipo`.
+Opcionales: `moneda` (`"PES"`), `ctz` (`1.0`), `nro_doc_receptor`,
+`receptor_razon_social`.
+
+<Aside type="note">
+  `nro_doc_receptor` se auto-deriva si es `None`: `doc_tipo=80` → `cuit_receptor`,
+  `doc_tipo=99` → `"0"`. Para otros `doc_tipo` es requerido.
+</Aside>
+
+Retorna `{ pdf_b64, filename }`.
+
+Guía relacionada: [Emitir una factura](/guias/emitir-factura/).

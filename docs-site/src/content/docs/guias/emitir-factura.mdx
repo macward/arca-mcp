@@ -1,0 +1,165 @@
+---
+title: Emitir una factura
+description: Flujo completo de emisión de una Factura B en homologación.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+import FlowStepper from '../../../components/FlowStepper.svelte';
+
+Esta guía muestra el flujo completo de emisión de una **Factura B** (`cbte_tipo: 6`)
+en homologación.
+
+<Aside type="note">
+  Prerequisito: completá [Setup y certificados](/guias/setup/) y verificá que
+  `setup_doctor` devuelva todo en `ok: true`.
+</Aside>
+
+## Conceptos clave
+
+<FlowStepper client:load />
+
+- **El flujo de tres pasos es obligatorio.** No hay atajo: previene comprobantes
+  rechazados que generan huecos en la numeración.
+- **Los borradores son locales.** `create_voucher_draft` persiste en SQLite
+  (`~/.arca-mcp/drafts.db`). Nada se envía a ARCA hasta `confirm_voucher_creation`.
+- **Idempotencia en la confirmación.** Si el proceso falla y reintentás con la misma
+  `idempotency_key`, obtenés el resultado original sin volver a emitir.
+
+## Paso 1 — Último número de comprobante
+
+```json
+{
+  "tool": "get_last_voucher_number",
+  "arguments": { "cbte_tipo": 6, "punto_venta": 1 }
+}
+```
+
+```json
+{ "cbte_nro": 41 }
+```
+
+El siguiente será el `42`. En homologación ARCA asigna el número automáticamente; este
+dato es referencial.
+
+## Paso 2 — Crear el borrador
+
+```json
+{
+  "tool": "create_voucher_draft",
+  "arguments": {
+    "cbte_tipo": 6,
+    "punto_venta": 1,
+    "fecha_cbte": "20260717",
+    "cuit_receptor": "27000000000",
+    "doc_tipo": 80,
+    "imp_neto": "1000.00",
+    "alicuota_id": "5"
+  }
+}
+```
+
+```json
+{
+  "draft_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "status": "PENDING",
+  "imp_neto": "1000.00",
+  "imp_iva": "210.00",
+  "imp_total": "1210.00",
+  "created_at": "2026-07-17T12:00:00+00:00"
+}
+```
+
+Guardá el `draft_id`.
+
+### Parámetros de uso frecuente
+
+| Parámetro | Descripción | Valores comunes |
+|---|---|---|
+| `cbte_tipo` | Tipo de comprobante | `6` = Factura B, `11` = C, `1` = A |
+| `punto_venta` | Punto de venta ARCA | `1` en homologación |
+| `fecha_cbte` | Fecha de emisión `YYYYMMDD` | Fecha de hoy |
+| `doc_tipo` | Tipo de documento receptor | `80` = CUIT, `96` = DNI, `99` = Consumidor Final |
+| `alicuota_id` | Alícuota de IVA | `"5"` = 21%, `"4"` = 10.5%, `"3"` = 0% |
+
+Para la lista completa usá `get_voucher_types`, `get_document_types` y `get_aliquot_types`.
+
+## Paso 3 — Validar el borrador
+
+```json
+{ "tool": "validate_voucher_draft", "arguments": { "draft_id": "3fa85f64-…" } }
+```
+
+Éxito:
+
+```json
+{ "is_valid": true, "status": "VALIDATED", "errors": [] }
+```
+
+Con errores (el draft permanece en `PENDING`):
+
+```json
+{
+  "is_valid": false,
+  "status": "PENDING",
+  "errors": [
+    { "field": "cuit_receptor", "message": "CUIT inválido: dígito verificador incorrecto" }
+  ]
+}
+```
+
+## Paso 4 — Confirmar la emisión
+
+```json
+{
+  "tool": "confirm_voucher_creation",
+  "arguments": {
+    "draft_id": "3fa85f64-…",
+    "idempotency_key": "factura-cliente-abc-001"
+  }
+}
+```
+
+```json
+{
+  "cae": "74291826403951",
+  "cbte_nro": 42,
+  "cae_fch_vto": "20260727",
+  "status": "CONFIRMED"
+}
+```
+
+El `cae` es el Código de Autorización Electrónico: es la prueba fiscal de la operación.
+
+## Paso 5 — Historial local
+
+```json
+{ "tool": "list_vouchers", "arguments": { "status": "CONFIRMED", "limit": 20 } }
+```
+
+## Paso 6 — Consultar en ARCA
+
+```json
+{
+  "tool": "get_voucher_info",
+  "arguments": { "cbte_tipo": 6, "punto_venta": 1, "cbte_nro": 42 }
+}
+```
+
+## Paso 7 — QR y PDF (opcional)
+
+Con el comprobante confirmado podés generar el QR AFIP (`generate_qr`) y el PDF con QR
+embebido (`generate_invoice_pdf_tool`). Ambas son operaciones locales puras. Ver
+[Facturación](/referencia/facturacion/).
+
+## Errores frecuentes
+
+| Causa | Descripción | Acción |
+|---|---|---|
+| `DRAFT_INVALID_STATUS` | Se intentó confirmar sin validar | Llamar `validate_voucher_draft` primero |
+| `WSFE_REJECTED` | ARCA rechazó el comprobante | Ver `observaciones` en la respuesta |
+| `EMISSION_IN_PROGRESS` | Confirmación duplicada en curso | Esperar o usar otra `idempotency_key` |
+| `DRAFT_NOT_FOUND` | `draft_id` inexistente | Verificar el `draft_id` |
+
+## Siguiente paso
+
+Aprendé a consultar contribuyentes en [Consultas al padrón](/guias/padron/).

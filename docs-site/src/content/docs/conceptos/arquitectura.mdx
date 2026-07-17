@@ -1,0 +1,67 @@
+---
+title: Arquitectura
+description: Cómo está organizado arca-mcp por capas.
+---
+
+arca-mcp separa la **superficie MCP** (definición de tools) de la **lógica de negocio
+fiscal**. Cada tool valida sus inputs con Pydantic en la capa MCP antes de delegar a
+las capas internas.
+
+## Capas
+
+```
+src/arca_mcp/
+  mcp/            # definición de tools MCP (FastMCP) — setup, certificates, lookup, invoicing
+  config/         # resolución de configuración (env → Settings → overrides)
+  certificates/   # manejo X509, validación, CMS signing
+  wsaa/           # autenticación WSAA (token + sign) con caché
+  wsfe/           # cliente SOAP WSFEv1 (zeep) + caché de catálogos
+  padron/         # cliente padrón A4
+  invoicing/      # drafts, idempotencia, QR, PDF (persistencia SQLite)
+  validation/     # validaciones fiscales locales (CUIT, IVA, comprobantes)
+  audit/          # audit log con write-ahead + fsync
+  policy/         # reglas de validación y política fiscal
+```
+
+## Montaje de servidores
+
+El servidor raíz `arca-mcp` monta cuatro sub-servidores FastMCP, cada uno agrupando
+tools por dominio:
+
+```python
+mcp.mount(certificates.server)
+mcp.mount(setup.server)
+mcp.mount(lookup.server)
+mcp.mount(invoicing.server)
+```
+
+## Flujo de una tool de red
+
+Las tools que hablan con ARCA siguen siempre el mismo pipeline:
+
+```
+resolve_runtime_config()      # env → Settings → overrides, valida paths
+   ↓
+caché de catálogo / token     # evita llamadas WSAA/WSFE innecesarias
+   ↓
+get_wsaa_token()              # firma CMS local → token + sign (cacheados por CUIT)
+   ↓
+cliente WSFE / padrón (zeep)  # llamada SOAP en un thread (run_in_executor)
+   ↓
+modelo Pydantic / ArcaError   # output estructurado
+```
+
+Los errores opacos de ARCA se transforman en estructuras `{ cause, message }`
+legibles. Ver [Errores](/referencia/errores/).
+
+## Persistencia
+
+Desde la v0.6, el estado crítico se persiste en SQLite bajo `~/.arca-mcp/`:
+
+- **`drafts.db`** — borradores de comprobante (`DraftStore`), sobreviven reinicios.
+- **`idempotency.db`** — claves de idempotencia (`IdempotencyStore`) con write-ahead-log.
+- **`audit/audit.jsonl`** — audit log con `fsync` y permisos `0600`.
+- Token WSAA cacheado por CUIT (`WsaaCache`) con refresh proactivo.
+
+Esto es lo que hace que la [idempotencia](/conceptos/human-in-the-loop/#idempotencia)
+sobreviva un crash a mitad de emisión.

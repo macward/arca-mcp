@@ -1,0 +1,75 @@
+---
+title: Catálogos y validación
+description: Catálogos WSFEv1 (FEParamGet*) y validaciones locales.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Dos familias de tools: **catálogos WSFEv1** (requieren red; resultados cacheados por
+ambiente) y **validaciones locales** (sin red).
+
+## Catálogos WSFEv1
+
+Todas toman su configuración del entorno (`ARCA_CERT_PATH`, `ARCA_KEY_PATH`,
+`ARCA_ENVIRONMENT`, `ARCA_CUIT`) y no reciben parámetros. Retornan
+`list[CatalogItem] | ArcaError`, donde cada `CatalogItem` tiene código y descripción.
+
+<Aside type="note">
+  Los resultados se cachean por ambiente: la primera llamada hace WSAA + WSFE, las
+  siguientes salen de caché.
+</Aside>
+
+| Tool | Devuelve | Ejemplos |
+|---|---|---|
+| `get_voucher_types` | Tipos de comprobante | Factura A (1), Factura B (6), NC A (3) |
+| `get_document_types` | Tipos de documento | DNI (96), CUIT (80), Pasaporte (94) |
+| `get_tax_types` | Tipos de tributo | IVA (1), Nacionales (2), Provinciales (3) |
+| `get_aliquot_types` | Alícuotas de IVA | 21% (5), 10.5% (4), 27% (6), Exento (3) |
+| `get_currency_types` | Monedas | Pesos (PES), Dólar (DOL), Euro (060) |
+
+**Uso**
+
+```json
+{ "tool": "get_aliquot_types" }
+```
+
+```json
+[
+  { "id": "5", "desc": "21%" },
+  { "id": "4", "desc": "10.5%" },
+  { "id": "6", "desc": "27%" }
+]
+```
+
+## Validaciones locales
+
+Sin red — validan contra catálogos locales. Retornan
+`{ "<campo>": "<valor>", "valid": true|false }`.
+
+### `validate_invoice_type`
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `invoice_type` | `str` | Código numérico del tipo de comprobante (ej. `"1"` = Factura A) |
+
+### `validate_vat_condition`
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `vat_condition` | `str` | Código de condición IVA (ej. `"1"` = Responsable Inscripto) |
+
+### `validate_currency`
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `currency` | `str` | Código de moneda AFIP (ej. `"PES"`, `"DOL"`) |
+
+**Uso**
+
+```json
+{ "tool": "validate_currency", "arguments": { "currency": "DOL" } }
+```
+
+```json
+{ "currency": "DOL", "valid": true }
+```

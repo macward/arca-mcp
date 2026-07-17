@@ -1,0 +1,67 @@
+---
+title: arca-mcp
+description: Servidor MCP para operaciones fiscales ARCA/AFIP. Determinista, seguro y Human-in-the-Loop.
+template: splash
+hero:
+  tagline: Hacer usable ARCA para developers y agentes. Consultá catálogos, validá contribuyentes y emití comprobantes con un flujo seguro draft → validate → confirm.
+  actions:
+    - text: Empezar
+      link: /empezar/introduccion/
+      icon: right-arrow
+    - text: Ver en GitHub
+      link: https://github.com/macward/arca-mcp
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Qué resuelve
+
+ARCA/AFIP expone servicios SOAP históricos, errores opacos y una separación estricta
+entre homologación y producción. **arca-mcp** los envuelve en herramientas MCP
+deterministas: inputs estructurados, outputs estructurados, sin heurísticas fiscales
+ocultas — pensadas para que un LLM (o tu código) las use sin equivocarse.
+
+<CardGrid stagger>
+  <Card title="Determinista" icon="setting">
+    Cada tool recibe inputs validados con Pydantic y retorna estructuras predecibles.
+    Los errores opacos de ARCA se traducen a `{ cause, message }` legibles.
+  </Card>
+  <Card title="Human in the Loop" icon="approve-check">
+    Las acciones irreversibles siguen `create_voucher_draft → validate_voucher_draft →
+    confirm_voucher_creation`. Nunca se emite sin confirmación explícita.
+  </Card>
+  <Card title="Seguro por diseño" icon="seti:lock">
+    La private key nunca se expone al LLM. La firma CMS y el login WSAA ocurren
+    localmente. Homologación y producción están estrictamente separadas.
+  </Card>
+  <Card title="Idempotente" icon="random">
+    Toda emisión recibe un `idempotency_key`. El estado se persiste en SQLite con
+    write-ahead-log para sobrevivir crashes y evitar doble facturación.
+  </Card>
+</CardGrid>
+
+## Rutas rápidas
+
+<CardGrid>
+  <Card title="Instalar y configurar" icon="rocket">
+    [Instalación](/empezar/instalacion/) · [Configuración](/empezar/configuracion/) ·
+    [Quickstart](/empezar/quickstart/)
+  </Card>
+  <Card title="Emitir tu primera factura" icon="document">
+    Seguí la guía [Emitir una factura](/guias/emitir-factura/) con el flujo completo en
+    homologación.
+  </Card>
+  <Card title="Conectar Claude Desktop" icon="puzzle">
+    [Integración con Claude Desktop](/guias/claude-desktop/) para operar en lenguaje natural.
+  </Card>
+  <Card title="Referencia de tools" icon="open-book">
+    Todas las herramientas documentadas en [Referencia](/referencia/tools/).
+  </Card>
+</CardGrid>
+
+:::note[Estado del proyecto]
+Actualmente **solo homologación**. La operación en producción se habilita en la v1.0.
+Ver el [roadmap](https://github.com/macward/arca-mcp/blob/main/docs/ROADMAP.md).
+:::

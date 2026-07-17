@@ -1,0 +1,55 @@
+---
+title: Tools de Padrón
+description: Consulta de contribuyentes con el servicio ws_sr_padron_a4.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Consultan el padrón A4 de ARCA. Requieren red, `ARCA_CUIT` configurado y el servicio
+`ws_sr_padron_a4` autorizado para el certificado. La configuración se toma del entorno.
+
+## `get_taxpayer_details`
+
+Retorna los datos completos de un contribuyente: denominación, estado, domicilio
+fiscal y actividades AFIP.
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `cuit` | `str` | CUIT a consultar (sin guiones) |
+
+Retorna `PersonaDetails | ArcaError`.
+
+```json
+{
+  "cuit": "20123456789",
+  "denomination": "ACME S.A.",
+  "status": "ACTIVO",
+  "fiscal_address": { "street": "Av. Corrientes", "number": "1234", "city": "CABA" },
+  "activities": ["620100", "620200"]
+}
+```
+
+## `validate_taxpayer_status`
+
+Verificación compacta de estado, sin exponer todos los datos del padrón. Ideal para
+chequear un receptor antes de facturar.
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `cuit` | `str` | CUIT a verificar (sin guiones) |
+
+Retorna `TaxpayerStatus | ArcaError`.
+
+```json
+{ "cuit": "20123456789", "active": true, "status_description": "Activo" }
+```
+
+El campo `active` es un booleano. Los estados posibles del padrón son `ACTIVO`,
+`INACTIVO`, `CANCELADO`, `BLOQUEADO`, `CLAUSURADO`.
+
+<Aside type="tip">
+  El campo `active` sólo es `true` para `ACTIVO`. Cualquier otro estado devuelve
+  `active: false` con su descripción legible en `status_description`.
+</Aside>
+
+Guía relacionada: [Consultas al padrón](/guias/padron/).

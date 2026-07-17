@@ -1,0 +1,53 @@
+---
+title: Seguridad
+description: Cómo arca-mcp protege la clave privada, las credenciales y el audit trail.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+La seguridad de arca-mcp se apoya en un principio: **lo sensible ocurre localmente y
+nunca llega al LLM**.
+
+## La private key nunca se expone
+
+- La clave privada no se pasa al modelo ni aparece en ninguna respuesta MCP.
+- La firma CMS del Login Ticket Request (para WSAA) y el manejo de credenciales
+  ocurren dentro del proceso local `arca-mcp`.
+- Las tools reciben *paths* a los certificados, no su contenido.
+
+## Audit trail robusto
+
+Cada emisión se registra en un audit log (`~/.arca-mcp/audit/audit.jsonl`) con
+garantías de integridad:
+
+- Escritura **write-ahead**: se registra `PENDING_CAE` *antes* de llamar a WSFE, y se
+  actualiza a `CAE_CONFIRMED` después.
+- **`fsync`** tras cada escritura, para no perder la última línea ante un crash.
+- Permisos de archivo **`0600`**: el log contiene CUIT, CAE e `idempotency_key` y no
+  debe quedar legible por otros usuarios.
+
+## Transporte HTTP protegido
+
+Cuando se corre con `MCP_TRANSPORT=http`, la variable `ARCA_API_KEY` activa un
+middleware que exige autenticación en cada request:
+
+- Acepta `x-api-key: <clave>` o `Authorization: Bearer <clave>`.
+- La comparación usa `hmac.compare_digest` (constant-time) para evitar timing attacks.
+- El parsing de `Authorization` es case-insensitive.
+
+<Aside type="note">
+  En modo `stdio` (el default, usado por Claude Desktop) no hay superficie de red: el
+  servidor se comunica por la entrada/salida estándar del proceso local.
+</Aside>
+
+## Separación de ambientes
+
+Homologación y producción usan certificados y endpoints distintos y no comparten
+módulos. Ver [Ambientes](/conceptos/ambientes/).
+
+## Recomendaciones
+
+- Guardá los `.crt`/`.key` fuera del repositorio y con permisos restrictivos.
+- No commitees el `.env`.
+- Usá `ARCA_API_KEY` siempre que expongas el transporte HTTP.
+- Para producción, usá certificados productivos dedicados y rotálos según tu política.

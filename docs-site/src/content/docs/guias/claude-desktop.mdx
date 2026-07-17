@@ -1,0 +1,113 @@
+---
+title: Claude Desktop
+description: Conectar arca-mcp con Claude Desktop para operar en lenguaje natural.
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+Claude Desktop soporta el protocolo MCP. Configurando arca-mcp como servidor, Claude
+puede llamar a sus tools durante la conversación: validar contribuyentes, crear
+borradores y emitir facturas, sin salir del chat. El servidor corre localmente: los
+certificados **nunca salen de tu equipo**.
+
+## 1. Ubicar el archivo de configuración
+
+| Sistema | Path |
+|---|---|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+
+Si no existe, crealo.
+
+## 2. Agregar arca-mcp a `mcpServers`
+
+<Tabs>
+  <TabItem label="uv (desde el repo)">
+
+```json
+{
+  "mcpServers": {
+    "arca": {
+      "command": "uv",
+      "args": ["run", "--project", "/ruta/absoluta/a/arca-mcp", "arca-mcp"],
+      "env": {
+        "ARCA_CERT_PATH": "/ruta/absoluta/homo.crt",
+        "ARCA_KEY_PATH": "/ruta/absoluta/homo.key",
+        "ARCA_CUIT": "20123456789",
+        "ARCA_ENVIRONMENT": "homologacion"
+      }
+    }
+  }
+}
+```
+
+  </TabItem>
+  <TabItem label="pip / PyPI">
+
+```json
+{
+  "mcpServers": {
+    "arca": {
+      "command": "arca-mcp",
+      "env": {
+        "ARCA_CERT_PATH": "/ruta/absoluta/homo.crt",
+        "ARCA_KEY_PATH": "/ruta/absoluta/homo.key",
+        "ARCA_CUIT": "20123456789",
+        "ARCA_ENVIRONMENT": "homologacion"
+      }
+    }
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
+
+Usá **rutas absolutas** tanto para el proyecto como para los certificados.
+
+## 3. Reiniciar y verificar
+
+<Steps>
+
+1. Cerrá y volvé a abrir Claude Desktop. Deberías ver el ícono de herramientas (🔧)
+   con `arca` listado.
+
+2. En el chat, pedí:
+
+   ```
+   Ejecutá setup_doctor y contame el resultado
+   ```
+
+   Si ves todos los checks en `ok: true`, la integración funciona.
+
+</Steps>
+
+## 4. Ejemplos en lenguaje natural
+
+```
+¿Está activo el contribuyente con CUIT 20123456789?
+```
+
+```
+Necesito emitir una Factura B por $1.000 más IVA 21% al CUIT 27000000000
+```
+
+```
+Mostrá las últimas 10 facturas emitidas
+```
+
+Claude elige las tools correctas y **pide confirmación antes de emitir** cualquier
+comprobante (paso `confirm_voucher_creation`).
+
+<Aside type="tip" title="Seguridad">
+  Los certificados solo existen en tu máquina; Claude Desktop los pasa como variables
+  de entorno al proceso `arca-mcp`, que nunca los expone en respuestas. Ver
+  [Seguridad](/conceptos/seguridad/).
+</Aside>
+
+## Troubleshooting
+
+- **No aparecen las tools de `arca`** → verificá que el JSON sea válido (sin comas
+  sobrantes) y que los paths sean absolutos. Revisá los logs en **Help → Open Logs**.
+- **El servidor arranca pero `setup_doctor` falla** → seguí [Setup y certificados](/guias/setup/).
+- **`uv: command not found`** → instalá uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`, o usá el path completo al ejecutable.

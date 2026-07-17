@@ -1,0 +1,69 @@
+---
+title: Tools de Setup
+description: Diagnóstico WSAA y autorización de servicios ARCA.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Diagnóstico técnico del setup ARCA: autenticación WSAA y autorización de servicios.
+Todas requieren red y aceptan overrides opcionales `cert_path`, `key_path`, `service`
+y `environment`.
+
+<Aside type="note">
+  Servicios permitidos para WSAA en estas tools: `wsfe` (factura electrónica) y
+  `ws_sr_padron_a4` (padrón). Un servicio no permitido retorna `SERVICE_UNAUTHORIZED`.
+</Aside>
+
+## `validate_wsaa_login`
+
+Intenta autenticarse con WSAA y verifica que el token obtenido sea válido.
+
+**Parámetros**
+
+| Parámetro | Tipo | Default | Descripción |
+|---|---|---|---|
+| `cert_path` | `str?` | `ARCA_CERT_PATH` | Override del path al certificado |
+| `key_path` | `str?` | `ARCA_KEY_PATH` | Override del path a la private key |
+| `service` | `str` | `"wsfe"` | Servicio a autenticar |
+| `environment` | `str` | `"homologacion"` | `"homologacion"` o `"produccion"` |
+
+Retorna un `SetupCheckResult` (`ok`, detalle) o `ArcaError`. Los overrides `cert_path`
+y `key_path` deben pasarse juntos o ninguno.
+
+## `validate_service_authorization`
+
+Verifica que el certificado tenga acceso autorizado a un servicio ARCA.
+
+**Parámetros** — idénticos a `validate_wsaa_login`.
+
+Retorna `SetupCheckResult | ArcaError`.
+
+## `setup_doctor`
+
+Ejecuta el diagnóstico completo, en secuencia:
+
+```
+private_key → certificate → cert_key_match → wsaa_login → service_authorization
+```
+
+Si algo falla, los checks downstream se marcan como `skipped` y el campo
+`failed_check` apunta al primer fallo, para que sepas exactamente qué corregir.
+
+**Parámetros** — idénticos a `validate_wsaa_login`.
+
+**Respuesta (ejemplo)**
+
+```json
+{
+  "checks": [
+    { "name": "private_key", "ok": true },
+    { "name": "certificate", "ok": true, "expires": "2027-01-01" },
+    { "name": "cert_key_match", "ok": true },
+    { "name": "wsaa_login", "ok": true },
+    { "name": "service_authorization", "ok": true }
+  ],
+  "failed_check": null
+}
+```
+
+Guía relacionada: [Setup y certificados](/guias/setup/).

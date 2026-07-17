@@ -1,0 +1,81 @@
+---
+title: Instalación
+description: Instalar arca-mcp con uv o pip.
+---
+
+import { Tabs, TabItem, Steps } from '@astrojs/starlight/components';
+
+## Requisitos previos
+
+- **Python 3.12 o superior**
+- **`uv`** (recomendado): `pip install uv` o `brew install uv`
+- Un CUIT habilitado en ARCA y acceso al portal para gestionar certificados
+
+## Instalar
+
+<Tabs>
+  <TabItem label="uv (desde el repo)">
+
+```bash
+git clone https://github.com/macward/arca-mcp
+cd arca-mcp
+uv sync
+```
+
+Verificá la instalación:
+
+```bash
+uv run arca-mcp --help
+```
+
+  </TabItem>
+  <TabItem label="pip / PyPI">
+
+```bash
+pip install arca-mcp
+```
+
+Esto instala el ejecutable `arca-mcp` en tu entorno:
+
+```bash
+arca-mcp --help
+```
+
+  </TabItem>
+</Tabs>
+
+## Transportes
+
+El servidor arranca en modo **stdio** por defecto (el que usan Claude Desktop y la
+mayoría de los clientes MCP). Podés cambiar a HTTP con la variable `MCP_TRANSPORT`:
+
+<Tabs>
+  <TabItem label="stdio (default)">
+
+```bash
+uv run arca-mcp
+```
+
+Ideal para Claude Desktop y clientes MCP locales.
+
+  </TabItem>
+  <TabItem label="HTTP">
+
+```bash
+MCP_TRANSPORT=http \
+ARCA_HTTP_HOST=127.0.0.1 \
+ARCA_HTTP_PORT=8000 \
+ARCA_API_KEY=una-clave-secreta \
+uv run arca-mcp
+```
+
+Expone `streamable-http`. Si `ARCA_API_KEY` está seteada, cada request debe incluir
+`x-api-key: <clave>` o `Authorization: Bearer <clave>`.
+
+  </TabItem>
+</Tabs>
+
+## Siguiente paso
+
+Antes de arrancar el servidor necesitás certificados y variables de entorno:
+seguí con [Configuración](/empezar/configuracion/).

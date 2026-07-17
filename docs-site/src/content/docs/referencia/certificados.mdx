@@ -1,0 +1,58 @@
+---
+title: Tools de Certificados
+description: Validar e inspeccionar certificados X509 y private keys sin red.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">
+  Estas tools son **100% locales** — no requieren WSAA ni conexión a ARCA. Todas
+  aceptan overrides opcionales `cert_path` y `key_path`; si no se pasan, se resuelven
+  desde `ARCA_CERT_PATH` / `ARCA_KEY_PATH`. Deben pasarse juntos o ninguno.
+</Aside>
+
+## `validate_certificate`
+
+Valida un certificado X509: que sea parseable y esté vigente (no vencido).
+
+| Parámetro | Tipo | Default |
+|---|---|---|
+| `cert_path` | `str?` | `ARCA_CERT_PATH` |
+| `key_path` | `str?` | `ARCA_KEY_PATH` |
+
+Retorna `CertificateValidationResult | ArcaError`.
+
+## `validate_private_key`
+
+Valida que una private key RSA sea parseable y no esté corrupta.
+
+**Parámetros** — `cert_path`, `key_path` (como arriba). Retorna
+`CertificateValidationResult | ArcaError`.
+
+## `validate_cert_key_match`
+
+Verifica que el certificado corresponda a la private key (que sean un par válido).
+
+**Parámetros** — `cert_path`, `key_path`. Retorna `CertificateValidationResult | ArcaError`.
+
+## `inspect_certificate`
+
+Retorna la metadata del certificado: subject, issuer, fechas de validez, CN y serial.
+
+**Parámetros** — `cert_path`, `key_path`. Retorna
+`CertificateInspection | CertificateValidationResult | ArcaError`.
+
+**Respuesta (ejemplo)**
+
+```json
+{
+  "subject": "CN=MiServicio, O=MiEmpresa, C=AR",
+  "issuer": "CN=AC Homologación, O=ARCA",
+  "not_before": "2026-01-01T00:00:00",
+  "not_after": "2027-01-01T00:00:00",
+  "common_name": "MiServicio",
+  "serial_number": "1234567890"
+}
+```
+
+Guía relacionada: [Setup y certificados](/guias/setup/).

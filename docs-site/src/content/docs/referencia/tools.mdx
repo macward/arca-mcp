@@ -1,0 +1,45 @@
+---
+title: Referencia de tools
+description: Todas las tools MCP que expone arca-mcp, filtrables por nombre y capa.
+---
+
+import ToolTable from '../../../components/ToolTable.svelte';
+
+arca-mcp expone las siguientes tools, agrupadas por dominio. Las de **capa local** no
+requieren red ni certificado; las de **capa red** hablan con ARCA (WSAA + WSFE/padrón)
+y necesitan `ARCA_CUIT` configurado.
+
+<ToolTable client:load tools={[
+  { name: 'validate_wsaa_login', layer: 'red', href: '/referencia/setup/#validate_wsaa_login', desc: 'Autentica con WSAA y verifica que el token sea válido.' },
+  { name: 'validate_service_authorization', layer: 'red', href: '/referencia/setup/#validate_service_authorization', desc: 'Verifica que el cert tenga acceso autorizado a un servicio.' },
+  { name: 'setup_doctor', layer: 'red', href: '/referencia/setup/#setup_doctor', desc: 'Diagnóstico técnico completo del setup ARCA.' },
+  { name: 'validate_certificate', layer: 'local', href: '/referencia/certificados/#validate_certificate', desc: 'Valida un X509: parseable y vigente.' },
+  { name: 'validate_private_key', layer: 'local', href: '/referencia/certificados/#validate_private_key', desc: 'Valida que una private key RSA sea parseable.' },
+  { name: 'validate_cert_key_match', layer: 'local', href: '/referencia/certificados/#validate_cert_key_match', desc: 'Verifica que cert y key correspondan.' },
+  { name: 'inspect_certificate', layer: 'local', href: '/referencia/certificados/#inspect_certificate', desc: 'Metadata del certificado: subject, issuer, fechas.' },
+  { name: 'get_voucher_types', layer: 'red', href: '/referencia/lookup/#get_voucher_types', desc: 'Tipos de comprobante WSFEv1.' },
+  { name: 'get_document_types', layer: 'red', href: '/referencia/lookup/#get_document_types', desc: 'Tipos de documento WSFEv1.' },
+  { name: 'get_tax_types', layer: 'red', href: '/referencia/lookup/#get_tax_types', desc: 'Tipos de tributo WSFEv1.' },
+  { name: 'get_aliquot_types', layer: 'red', href: '/referencia/lookup/#get_aliquot_types', desc: 'Alícuotas de IVA WSFEv1.' },
+  { name: 'get_currency_types', layer: 'red', href: '/referencia/lookup/#get_currency_types', desc: 'Monedas disponibles WSFEv1.' },
+  { name: 'validate_invoice_type', layer: 'local', href: '/referencia/lookup/#validate_invoice_type', desc: 'Valida un tipo de comprobante contra catálogo local.' },
+  { name: 'validate_vat_condition', layer: 'local', href: '/referencia/lookup/#validate_vat_condition', desc: 'Valida una condición frente al IVA (local).' },
+  { name: 'validate_currency', layer: 'local', href: '/referencia/lookup/#validate_currency', desc: 'Valida un código de moneda (local).' },
+  { name: 'get_taxpayer_details', layer: 'red', href: '/referencia/padron/#get_taxpayer_details', desc: 'Datos completos del contribuyente (padrón A4).' },
+  { name: 'validate_taxpayer_status', layer: 'red', href: '/referencia/padron/#validate_taxpayer_status', desc: 'Verificación rápida activo/inactivo.' },
+  { name: 'create_voucher_draft', layer: 'local', href: '/referencia/facturacion/#create_voucher_draft', desc: 'Crea un borrador PENDING en SQLite local.' },
+  { name: 'validate_voucher_draft', layer: 'local', href: '/referencia/facturacion/#validate_voucher_draft', desc: 'Valida un draft contra política fiscal.' },
+  { name: 'confirm_voucher_creation', layer: 'red', href: '/referencia/facturacion/#confirm_voucher_creation', desc: 'Solicita el CAE a WSFE. Irreversible.' },
+  { name: 'get_last_voucher_number', layer: 'red', href: '/referencia/facturacion/#get_last_voucher_number', desc: 'Último número autorizado para PV + tipo.' },
+  { name: 'get_voucher_info', layer: 'red', href: '/referencia/facturacion/#get_voucher_info', desc: 'Datos de un comprobante registrado en WSFEv1.' },
+  { name: 'list_vouchers', layer: 'local', href: '/referencia/facturacion/#list_vouchers', desc: 'Historial local de emisión (SQLite).' },
+  { name: 'generate_qr', layer: 'local', href: '/referencia/facturacion/#generate_qr', desc: 'QR AFIP de un comprobante confirmado.' },
+  { name: 'generate_invoice_pdf_tool', layer: 'local', href: '/referencia/facturacion/#generate_invoice_pdf_tool', desc: 'PDF de factura con QR embebido.' },
+]} />
+
+## Convenciones
+
+- Casi todas las tools de red aceptan overrides `cert_path`, `key_path` y
+  `environment` por llamada; si no se pasan, se resuelven desde el entorno.
+- Las tools retornan modelos estructurados o un `ArcaError` con `{ cause, message }`.
+  Ver [Errores](/referencia/errores/).

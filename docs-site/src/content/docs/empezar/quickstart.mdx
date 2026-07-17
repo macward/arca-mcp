@@ -1,0 +1,79 @@
+---
+title: Quickstart
+description: Verificá el setup y emití tu primera factura en homologación en pocos pasos.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+import FlowStepper from '../../../components/FlowStepper.svelte';
+
+Este quickstart asume que ya [instalaste](/empezar/instalacion/) arca-mcp y
+[configuraste](/empezar/configuracion/) tus certificados de homologación.
+
+## 1. Diagnóstico de setup
+
+Antes que nada, corré `setup_doctor`. Encadena todos los checks técnicos y te dice
+exactamente dónde falla si algo no está bien:
+
+```json
+{ "tool": "setup_doctor" }
+```
+
+Una respuesta sana tiene todos los checks en `ok: true`. Si alguno falla, el campo
+`failed_check` apunta al primero y los siguientes quedan `skipped`.
+
+<Aside type="tip">
+  ¿Falla algo? La guía [Setup y certificados](/guias/setup/) cubre la generación de
+  certificados de homologación y los errores más comunes.
+</Aside>
+
+## 2. El flujo de emisión
+
+Toda emisión pasa por tres pasos. Los dos primeros son locales y reversibles; solo el
+tercero produce el comprobante fiscal:
+
+<FlowStepper client:load />
+
+## 3. Emitir en homologación
+
+<Steps>
+
+1. **Crear el borrador**
+
+   ```json
+   {
+     "tool": "create_voucher_draft",
+     "arguments": {
+       "cbte_tipo": 6, "punto_venta": 1, "fecha_cbte": "20260717",
+       "cuit_receptor": "27000000000", "doc_tipo": 80,
+       "imp_neto": "1000.00", "alicuota_id": "5"
+     }
+   }
+   ```
+
+   Guardá el `draft_id` de la respuesta.
+
+2. **Validar el borrador**
+
+   ```json
+   { "tool": "validate_voucher_draft", "arguments": { "draft_id": "<draft_id>" } }
+   ```
+
+   El draft pasa a `VALIDATED` si no hay errores de política fiscal.
+
+3. **Confirmar la emisión**
+
+   ```json
+   {
+     "tool": "confirm_voucher_creation",
+     "arguments": { "draft_id": "<draft_id>", "idempotency_key": "quickstart-001" }
+   }
+   ```
+
+   La respuesta trae el `cae` emitido por ARCA.
+
+</Steps>
+
+## Siguiente paso
+
+La guía [Emitir una factura](/guias/emitir-factura/) explica cada campo, los catálogos
+y el manejo de errores en detalle.
