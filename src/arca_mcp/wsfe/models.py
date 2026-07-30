@@ -10,7 +10,7 @@ def _validate_yyyymmdd(field_name: str, v: str) -> str:
     try:
         date.fromisoformat(f"{v[:4]}-{v[4:6]}-{v[6:]}")
     except ValueError:
-        raise ValueError(f"{field_name} '{v}' is not a valid calendar date.")
+        raise ValueError(f"{field_name} '{v}' is not a valid calendar date.") from None
     return v
 
 

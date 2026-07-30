@@ -10,8 +10,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from arca_mcp.invoicing.models import VoucherDraft
-from arca_mcp.validation.catalogs import IVA_ALIQUOTS, INVOICE_TYPES
-
+from arca_mcp.validation.catalogs import INVOICE_TYPES, IVA_ALIQUOTS
 
 # ---------------------------------------------------------------------------
 # Result types

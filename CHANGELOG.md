@@ -13,9 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `resolve_runtime_config`: la resolución y validación de `cert_path`/`key_path` (override → Settings, debe existir en el filesystem) se extrae al helper reutilizable `_resolve_path_field`, eliminando la duplicación
+- `playwright` pasa a ser una dependencia opcional del extra `portal` (reservado para la automatización del portal ARCA del roadmap v1.0). Instalación: `pip install "arca-mcp[portal]"`. La instalación base ya no lo descarga
+- `starlette` (usado por el middleware HTTP de `server.py`) ahora se declara explícitamente como dependencia directa en vez de depender de la transitiva de `fastmcp`
+- Se reactivan las reglas de lint de ruff (`E`, `F`, `I`, `B904`) que estaban relajadas; imports ordenados y sin usar eliminados en todo `src/`
+- Encadenamiento explícito de excepciones (`raise ... from`) en `certificates/loader.py` y en los validators de fecha/entorno, preservando la causa donde aporta contexto
 
 ### Removed
 - `Settings.is_production` — property sin uso en el codebase
+- `import base64` sin uso en `wsaa/signing.py`
 
 ## [0.6.1] - 2026-06-03
 

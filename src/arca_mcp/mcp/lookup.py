@@ -15,8 +15,8 @@ from arca_mcp.mcp._auth import require_emitter_cuit as _require_emitter_cuit
 from arca_mcp.padron import client as padron_client
 from arca_mcp.padron.models import PersonaDetails, TaxpayerStatus
 from arca_mcp.validation import catalogs
-from arca_mcp.wsfe import client as wsfe_client
 from arca_mcp.wsfe import catalog_cache
+from arca_mcp.wsfe import client as wsfe_client
 from arca_mcp.wsfe.models import CatalogItem
 
 server = fastmcp.FastMCP("lookup")

@@ -17,8 +17,8 @@ el resolver lo hacen. El singleton se inicializa una única vez en server.py y
 se pasa al resolver vía _settings.
 """
 
-from arca_mcp.config.settings import Environment, Settings
 from arca_mcp.config.resolver import ConfigOverrides, RuntimeConfig, resolve_runtime_config
+from arca_mcp.config.settings import Environment, Settings
 
 # Singleton de Settings cargado al startup del servidor.
 # Nunca accedido directamente por las tools — solo consumido por el resolver.

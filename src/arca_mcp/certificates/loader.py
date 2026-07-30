@@ -11,28 +11,28 @@ def load_certificate(path: Path) -> x509.Certificate:
     try:
         pem_data = path.read_bytes()
     except FileNotFoundError:
-        raise CertificateLoadError(f"Archivo no encontrado: {path}")
+        raise CertificateLoadError(f"Archivo no encontrado: {path}") from None
     except OSError as e:
-        raise CertificateLoadError(f"Error leyendo archivo: {e}")
+        raise CertificateLoadError(f"Error leyendo archivo: {e}") from e
 
     try:
         return x509.load_pem_x509_certificate(pem_data)
     except Exception as e:
-        raise CertificateLoadError(f"Certificado inválido o corrompido: {e}")
+        raise CertificateLoadError(f"Certificado inválido o corrompido: {e}") from e
 
 
 def load_private_key(path: Path) -> RSAPrivateKey:
     try:
         pem_data = path.read_bytes()
     except FileNotFoundError:
-        raise PrivateKeyLoadError(f"Archivo no encontrado: {path}")
+        raise PrivateKeyLoadError(f"Archivo no encontrado: {path}") from None
     except OSError as e:
-        raise PrivateKeyLoadError(f"Error leyendo archivo: {e}")
+        raise PrivateKeyLoadError(f"Error leyendo archivo: {e}") from e
 
     try:
         key = load_pem_private_key(pem_data, password=None)
     except Exception as e:
-        raise PrivateKeyLoadError(f"Private key inválida o corrompida: {e}")
+        raise PrivateKeyLoadError(f"Private key inválida o corrompida: {e}") from e
 
     if not isinstance(key, RSAPrivateKey):
         raise PrivateKeyLoadError(f"Tipo de key no soportado: {type(key).__name__}. Se requiere RSA.")

@@ -12,7 +12,11 @@ from arca_mcp.wsaa import (
     SetupDoctorReport,
     WsaaEnvironment,
     run_setup_doctor,
+)
+from arca_mcp.wsaa import (
     validate_service_authorization as _validate_service,
+)
+from arca_mcp.wsaa import (
     validate_wsaa_login as _validate_wsaa,
 )
 
@@ -52,7 +56,7 @@ def _build_overrides(
             valid = ", ".join(member.value for member in Environment)
             raise ValueError(
                 f"environment inválido: {environment!r}. Valores válidos: {valid}"
-            )
+            ) from None
     return ConfigOverrides(
         cert_path=Path(cert_path) if cert_path is not None else None,
         key_path=Path(key_path) if key_path is not None else None,

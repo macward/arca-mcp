@@ -1,4 +1,3 @@
-import base64
 import email
 from pathlib import Path
 

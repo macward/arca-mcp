@@ -53,7 +53,7 @@ class VoucherDraft(BaseModel):
         try:
             date.fromisoformat(f"{v[:4]}-{v[4:6]}-{v[6:]}")
         except ValueError:
-            raise ValueError(f"fecha_cbte '{v}' is not a valid calendar date.")
+            raise ValueError(f"fecha_cbte '{v}' is not a valid calendar date.") from None
         return v
 
     # Receptor

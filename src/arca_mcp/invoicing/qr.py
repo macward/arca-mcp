@@ -10,7 +10,6 @@ from typing import Literal
 import qrcode
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-
 _CAE_RE = re.compile(r"^\d{14}$")
 _CUIT_RE = re.compile(r"^\d{11}$")
 
@@ -44,7 +43,7 @@ class QRPayload(BaseModel):
         try:
             datetime.date.fromisoformat(v)
         except ValueError:
-            raise ValueError("fecha must be a valid calendar date in YYYY-MM-DD format")
+            raise ValueError("fecha must be a valid calendar date in YYYY-MM-DD format") from None
         return v
 
     @field_validator("cuit")

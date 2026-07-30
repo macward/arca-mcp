@@ -24,7 +24,6 @@ from pathlib import Path
 
 from arca_mcp.invoicing.models import DraftStatus, VoucherDraft
 
-
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS drafts (
     draft_id   TEXT PRIMARY KEY,

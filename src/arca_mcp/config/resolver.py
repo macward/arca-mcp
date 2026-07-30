@@ -19,7 +19,7 @@ from typing import Union
 
 from pydantic import BaseModel, ConfigDict
 
-from arca_mcp.config.settings import Settings, Environment
+from arca_mcp.config.settings import Environment, Settings
 from arca_mcp.errors import ArcaError, ArcaErrorCause
 
 

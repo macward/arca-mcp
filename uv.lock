@@ -38,19 +38,24 @@ wheels = [
 
 [[package]]
 name = "arca-mcp"
-version = "0.6.0"
+version = "0.6.1"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
     { name = "fastmcp" },
     { name = "httpx" },
     { name = "lxml" },
-    { name = "playwright" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "qrcode", extra = ["pil"] },
     { name = "reportlab" },
+    { name = "starlette" },
     { name = "zeep" },
+]
+
+[package.optional-dependencies]
+portal = [
+    { name = "playwright" },
 ]
 
 [package.dev-dependencies]
@@ -67,13 +72,15 @@ requires-dist = [
     { name = "fastmcp", specifier = ">=2.0" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "lxml", specifier = ">=5.0" },
-    { name = "playwright", specifier = ">=1.48" },
+    { name = "playwright", marker = "extra == 'portal'", specifier = ">=1.48" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pydantic-settings", specifier = ">=2.0" },
     { name = "qrcode", extras = ["pil"], specifier = ">=7.4" },
     { name = "reportlab", specifier = ">=4.5.1" },
+    { name = "starlette", specifier = ">=0.37" },
     { name = "zeep", specifier = ">=4.2" },
 ]
+provides-extras = ["portal"]
 
 [package.metadata.requires-dev]
 dev = [
