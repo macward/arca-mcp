@@ -14,4 +14,6 @@ __pycache__/
 dist/
 .pytest_cache/
 .ruff_cache/
+.coverage
+htmlcov/
 *.egg-info/

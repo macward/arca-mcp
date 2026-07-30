@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Cobertura del camino crítico de emisión (`mcp/invoicing.py`): 38% → 82%. Nuevos `tests/mcp/test_confirm_voucher_creation.py` (happy path, idempotencia PENDING/DONE, estados de draft inválidos, fallos de config/WSAA, error y rechazo de WSFE, fallo de `set_done` con preservación del CAE en el audit log, fallo del propio audit log) y `tests/mcp/test_voucher_draft_flow.py` (flujo HITL completo `create → validate → confirm`). Todo con dobles manuales y sin acceso a red
 - Sitio de documentación de uso en `docs-site/` (Astro + Starlight + Svelte 5): guías, conceptos y referencia completa de las 25 tools MCP, con 3 componentes Svelte interactivos (stepper del flujo de emisión, tabla filtrable de tools, comparador de ambientes)
 
 ### Changed
