@@ -119,7 +119,7 @@ async def test_atomic_write_preserves_previous_entries(log_path: Path) -> None:
 
     lines = log_path.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 3
-    events = [json.loads(l)["event"] for l in lines]
+    events = [json.loads(line)["event"] for line in lines]
     assert events == ["FIRST", "SECOND", "THIRD"]
 
 
@@ -182,6 +182,6 @@ async def test_pending_cae_precedes_cae_confirmed(log_path: Path) -> None:
 
     lines = log_path.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 2
-    events = [json.loads(l)["event"] for l in lines]
+    events = [json.loads(line)["event"] for line in lines]
     assert events[0] == "PENDING_CAE"
     assert events[1] == "CAE_CONFIRMED"

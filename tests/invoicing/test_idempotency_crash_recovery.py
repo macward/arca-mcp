@@ -13,7 +13,6 @@ from datetime import datetime, timedelta, timezone
 
 from arca_mcp.invoicing.idempotency import IdempotencyStore
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

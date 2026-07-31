@@ -8,13 +8,9 @@ Verifica que:
 - El resolver usa el singleton del servidor cuando está disponible.
 """
 
-import os
-from pathlib import Path
-
 import pytest
 
 from arca_mcp.config.settings import Environment, Settings
-
 
 # ---------------------------------------------------------------------------
 # Carga desde env vars

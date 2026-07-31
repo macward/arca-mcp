@@ -291,10 +291,11 @@ class TestValidateInvalidAlicuota:
     @pytest.mark.asyncio
     async def test_validate_draft_with_invalid_alicuota_via_store(self, isolated_stores):
         """If a draft with an invalid alicuota somehow reaches the store, validate rejects it."""
-        from arca_mcp.invoicing.models import DraftStatus, VoucherDraft
-        from decimal import Decimal
-        from datetime import datetime, timezone
         import uuid
+        from datetime import datetime, timezone
+        from decimal import Decimal
+
+        from arca_mcp.invoicing.models import DraftStatus, VoucherDraft
 
         draft_store, _ = isolated_stores
 

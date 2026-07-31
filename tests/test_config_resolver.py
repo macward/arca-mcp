@@ -14,7 +14,6 @@ from arca_mcp.config import ConfigOverrides, RuntimeConfig, resolve_runtime_conf
 from arca_mcp.config.settings import Environment, Settings
 from arca_mcp.errors import ArcaError, ArcaErrorCause
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

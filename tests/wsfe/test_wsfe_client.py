@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -287,8 +288,6 @@ class TestClientCache:
 # ---------------------------------------------------------------------------
 # fecae_solicitar — DocNro mapping for Consumidor Final (doc_tipo=99)
 # ---------------------------------------------------------------------------
-
-from decimal import Decimal
 
 
 def _make_fecae_request(**overrides: Any) -> FECAESolicitarRequest:

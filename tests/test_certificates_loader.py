@@ -33,11 +33,11 @@ def test_load_private_key_invalid_pem(tmp_path):
 
 def test_load_certificate_returns_x509(tmp_path):
     # Certificado de prueba autofirmado generado con cryptography
-    from cryptography import x509
+    import datetime
+
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
     from cryptography.x509.oid import NameOID
-    import datetime
 
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "test")])

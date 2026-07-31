@@ -14,7 +14,6 @@ from arca_mcp.invoicing.draft_store import (
 )
 from arca_mcp.invoicing.models import DraftStatus, VoucherDraft
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

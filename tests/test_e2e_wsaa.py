@@ -23,7 +23,6 @@ import pytest
 
 from arca_mcp.wsaa import WsaaEnvironment, run_setup_doctor
 
-
 CERT_PATH = os.environ.get("ARCA_TEST_CERT_PATH")
 KEY_PATH = os.environ.get("ARCA_TEST_KEY_PATH")
 SERVICE = os.environ.get("ARCA_TEST_SERVICE", "wsfe")
