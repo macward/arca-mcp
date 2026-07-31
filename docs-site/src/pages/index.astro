@@ -1,0 +1,825 @@
+---
+// Landing de arca-mcp. Reemplaza la splash de Starlight como raíz del sitio;
+// los docs viven bajo /empezar, /conceptos, /guias y /referencia.
+const GITHUB = 'https://github.com/macward/arca-mcp';
+const DOCS = '/empezar/introduccion/';
+---
+
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>arca-mcp — ARCA usable para developers y agentes</title>
+    <meta
+      name="description"
+      content="Servidor MCP para operaciones fiscales ARCA/AFIP. Determinista, seguro y Human-in-the-Loop: catálogos, padrón y emisión de comprobantes con flujo draft → validate → confirm."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+    />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="/">
+        <span class="brand-mark">◧</span> arca-mcp
+      </a>
+      <nav>
+        <a href={DOCS}>Documentación</a>
+        <a href="/referencia/tools/">Tools</a>
+        <a href={GITHUB} rel="noopener">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">SERVIDOR MCP · ARCA / AFIP · PYTHON 3.12</p>
+          <h1>ARCA, <em>usable</em><br />para developers<br />y agentes.</h1>
+          <p class="lede">
+            arca-mcp envuelve los servicios SOAP de ARCA en tools MCP deterministas:
+            consultá catálogos, validá contribuyentes en el padrón y emití comprobantes
+            con un flujo seguro que siempre pide confirmación humana antes de facturar.
+          </p>
+          <div class="actions">
+            <a class="btn btn-primary" href={DOCS}>Leer la documentación</a>
+            <a class="btn btn-ghost" href={GITHUB} rel="noopener">Ver en GitHub ↗</a>
+          </div>
+          <p class="hero-note">
+            Open source · MIT · Hoy en <strong>homologación</strong>, producción en v1.0
+          </p>
+        </div>
+
+        <figure class="receipt" aria-label="Ejemplo del flujo de emisión draft, validate, confirm">
+          <div class="receipt-head">
+            <span>SESIÓN MCP</span>
+            <span class="tag tag-homo">HOMOLOGACIÓN</span>
+          </div>
+          <ol class="receipt-flow">
+            <li>
+              <span class="step">1</span>
+              <div>
+                <code class="call">create_voucher_draft</code>
+                <span class="arg">{'{ cbte_tipo: 6, importe_total: 121000.00 }'}</span>
+                <span class="ok">✓ draft_id: dft_01JX…</span>
+              </div>
+            </li>
+            <li>
+              <span class="step">2</span>
+              <div>
+                <code class="call">validate_voucher_draft</code>
+                <span class="arg">{'{ draft_id: dft_01JX… }'}</span>
+                <span class="ok">✓ válido — sin observaciones de ARCA</span>
+              </div>
+            </li>
+            <li>
+              <span class="step">3</span>
+              <div>
+                <code class="call">confirm_voucher_creation</code>
+                <span class="arg">{'{ draft_id, idempotency_key: fac-0042 }'}</span>
+                <span class="halt">⏸ esperando confirmación humana…</span>
+              </div>
+            </li>
+          </ol>
+          <div class="receipt-result">
+            <div class="cae">
+              <span class="cae-label">CAE</span>
+              <span class="cae-num">75123456789012</span>
+              <span class="cae-vto">VTO 10/08/2026</span>
+            </div>
+            <span class="stamp">AUTORIZADO</span>
+          </div>
+        </figure>
+      </section>
+
+      <section class="translate">
+        <p class="eyebrow">CAMPO 01 · QUÉ RESUELVE</p>
+        <h2>ARCA habla SOAP de 2005. Tu agente no debería.</h2>
+        <div class="translate-grid">
+          <div class="translate-row">
+            <p class="from">Servicios SOAP históricos, WSDL y firma CMS a mano</p>
+            <span class="translate-arrow" aria-hidden="true">→</span>
+            <p class="to">Tools MCP con inputs y outputs estructurados, validados con Pydantic</p>
+          </div>
+          <div class="translate-row">
+            <p class="from">Errores opacos: <code>10016: Campo CbteDesde…</code></p>
+            <span class="translate-arrow" aria-hidden="true">→</span>
+            <p class="to">Estructuras legibles <code>{'{ cause, message }'}</code> que un LLM puede manejar</p>
+          </div>
+          <div class="translate-row">
+            <p class="from">Homologación y producción mezcladas en el mismo script</p>
+            <span class="translate-arrow" aria-hidden="true">→</span>
+            <p class="to">Ambientes estrictamente separados, siempre explícitos en configuración</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="principles">
+        <p class="eyebrow">CAMPO 02 · PRINCIPIOS DE DISEÑO</p>
+        <h2>Pensado para que un agente no se equivoque.</h2>
+        <div class="cards">
+          <article>
+            <h3>Determinista</h3>
+            <p>
+              Sin inferencias ocultas ni heurísticas fiscales invisibles. Cada tool recibe
+              inputs estructurados y devuelve outputs predecibles.
+            </p>
+          </article>
+          <article>
+            <h3>Human in the Loop</h3>
+            <p>
+              Ninguna acción irreversible corre sola: la emisión sigue <code>draft → validate → confirm</code>
+              y la confirmación final es siempre humana.
+            </p>
+          </article>
+          <article>
+            <h3>Seguro por diseño</h3>
+            <p>
+              La private key nunca se expone al LLM ni aparece en respuestas MCP. La firma CMS
+              y el login WSAA ocurren localmente, en tu máquina.
+            </p>
+          </article>
+          <article>
+            <h3>Idempotente y persistente</h3>
+            <p>
+              Toda emisión lleva un <code>idempotency_key</code>. El estado se persiste en SQLite
+              con write-ahead-log: sin doble facturación, ni siquiera tras un crash.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="tools">
+        <p class="eyebrow">CAMPO 03 · HERRAMIENTAS</p>
+        <h2>Todo el ciclo, como tools MCP.</h2>
+        <ul class="tool-list">
+          <li>
+            <a href="/referencia/setup/">
+              <code>setup</code>
+              <span>Diagnóstico de certificados, CSR y conexión WSAA</span>
+            </a>
+          </li>
+          <li>
+            <a href="/referencia/lookup/">
+              <code>lookup</code>
+              <span>Catálogos de comprobantes, IVA, monedas y validaciones</span>
+            </a>
+          </li>
+          <li>
+            <a href="/referencia/padron/">
+              <code>padron</code>
+              <span>Consulta de contribuyentes y condición fiscal por CUIT</span>
+            </a>
+          </li>
+          <li>
+            <a href="/referencia/facturacion/">
+              <code>facturacion</code>
+              <span>Emisión con draft → validate → confirm, PDF con QR incluido</span>
+            </a>
+          </li>
+        </ul>
+        <a class="all-tools" href="/referencia/tools/">Referencia completa de tools →</a>
+      </section>
+
+      <section class="cta-final">
+        <div>
+          <h2>Emití tu primera factura en homologación.</h2>
+          <p>
+            Certificados de prueba, sin impacto fiscal real. La guía te lleva de cero
+            al primer CAE, y funciona igual desde Claude Desktop.
+          </p>
+        </div>
+        <div class="actions">
+          <a class="btn btn-primary" href="/empezar/quickstart/">Quickstart</a>
+          <a class="btn btn-ghost" href="/guias/emitir-factura/">Guía: emitir una factura</a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>arca-mcp · MIT · Max Ward</span>
+      <nav>
+        <a href={DOCS}>Documentación</a>
+        <a href={`${GITHUB}/blob/main/docs/ROADMAP.md`} rel="noopener">Roadmap</a>
+        <a href={GITHUB} rel="noopener">GitHub</a>
+      </nav>
+    </footer>
+  </body>
+</html>
+
+<style>
+  :root {
+    --paper: #f7f9fc;
+    --paper-raised: #ffffff;
+    --ink: #0e1b2c;
+    --ink-soft: #45566c;
+    --line: #d6deea;
+    --accent: #1d6fd6;
+    --accent-deep: #10437f;
+    --homo: #2e7d32;
+    --homo-bg: #e7f4e8;
+    --stamp: #1a5fbf;
+    --radius: 0.6rem;
+    --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: 'Archivo', system-ui, -apple-system, sans-serif;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  main {
+    max-width: 72rem;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+  }
+
+  a {
+    color: inherit;
+  }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.9em;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--sans);
+    font-stretch: 87.5%;
+    line-height: 1.08;
+    text-wrap: balance;
+  }
+
+  h2 {
+    font-size: clamp(1.6rem, 3.2vw, 2.3rem);
+    font-weight: 700;
+    max-width: 32ch;
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    color: var(--accent-deep);
+    margin-bottom: 0.9rem;
+  }
+
+  section {
+    padding: 4.5rem 0;
+    border-top: 1px solid var(--line);
+  }
+
+  /* ---------- header ---------- */
+  .top {
+    max-width: 72rem;
+    margin: 0 auto;
+    padding: 1.1rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .brand {
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: 1rem;
+    text-decoration: none;
+  }
+
+  .brand-mark {
+    color: var(--accent);
+  }
+
+  .top nav {
+    display: flex;
+    gap: 1.5rem;
+  }
+
+  .top nav a,
+  footer nav a {
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+    text-decoration: none;
+  }
+
+  .top nav a:hover,
+  footer nav a:hover {
+    color: var(--accent);
+  }
+
+  /* ---------- hero ---------- */
+  .hero {
+    border-top: none;
+    padding: 4rem 0 5rem;
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 3.5rem;
+    align-items: center;
+  }
+
+  h1 {
+    font-size: clamp(2.6rem, 6vw, 4.2rem);
+    font-weight: 800;
+    letter-spacing: -0.015em;
+  }
+
+  h1 em {
+    font-style: normal;
+    background: linear-gradient(transparent 62%, #cfe3ff 62%, #cfe3ff 94%, transparent 94%);
+  }
+
+  .lede {
+    margin-top: 1.3rem;
+    font-size: 1.08rem;
+    color: var(--ink-soft);
+    max-width: 46ch;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    margin-top: 1.8rem;
+  }
+
+  .btn {
+    display: inline-block;
+    padding: 0.7rem 1.3rem;
+    border-radius: var(--radius);
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-decoration: none;
+    border: 1px solid transparent;
+    transition: transform 120ms ease, box-shadow 120ms ease;
+  }
+
+  .btn:hover {
+    transform: translateY(-1px);
+  }
+
+  .btn:focus-visible,
+  a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 1px 2px rgba(14, 27, 44, 0.2);
+  }
+
+  .btn-primary:hover {
+    background: var(--accent-deep);
+  }
+
+  .btn-ghost {
+    border-color: var(--line);
+    color: var(--ink);
+    background: var(--paper-raised);
+  }
+
+  .hero-note {
+    margin-top: 1.4rem;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+  }
+
+  .hero-note strong {
+    color: var(--homo);
+  }
+
+  /* ---------- animación de entrada ---------- */
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes stamp-in {
+    0% {
+      opacity: 0;
+      transform: rotate(-14deg) scale(1.9);
+    }
+    70% {
+      opacity: 0.9;
+      transform: rotate(-3deg) scale(0.96);
+    }
+    100% {
+      opacity: 0.85;
+      transform: rotate(-4deg) scale(1);
+    }
+  }
+
+  @keyframes soft-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.45;
+    }
+  }
+
+  .hero-copy > * {
+    animation: fade-up 0.55s ease-out backwards;
+  }
+
+  .hero-copy > :nth-child(2) {
+    animation-delay: 0.08s;
+  }
+
+  .hero-copy > :nth-child(3) {
+    animation-delay: 0.16s;
+  }
+
+  .hero-copy > :nth-child(4) {
+    animation-delay: 0.24s;
+  }
+
+  .hero-copy > :nth-child(5) {
+    animation-delay: 0.32s;
+  }
+
+  /* La sesión MCP se "ejecuta" al cargar: cada paso entra en secuencia,
+     la espera de confirmación pulsa y el CAE se estampa al final. */
+  .receipt-flow li:nth-child(1) {
+    animation: fade-up 0.4s ease-out 0.5s backwards;
+  }
+
+  .receipt-flow li:nth-child(2) {
+    animation: fade-up 0.4s ease-out 1.15s backwards;
+  }
+
+  .receipt-flow li:nth-child(3) {
+    animation: fade-up 0.4s ease-out 1.8s backwards;
+  }
+
+  .halt {
+    animation: soft-pulse 1.6s ease-in-out 2.2s 2;
+  }
+
+  .receipt-result {
+    animation: fade-up 0.4s ease-out 2.9s backwards;
+  }
+
+  .stamp {
+    animation: stamp-in 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) 3.3s backwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hero-copy > *,
+    .receipt-flow li,
+    .halt,
+    .receipt-result,
+    .stamp {
+      animation: none;
+    }
+  }
+
+  /* ---------- receipt (firma) ---------- */
+  .receipt {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 32px rgba(14, 27, 44, 0.1);
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    overflow: hidden;
+  }
+
+  .receipt-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px dashed var(--line);
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    color: var(--ink-soft);
+  }
+
+  .tag {
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+  }
+
+  .tag-homo {
+    color: var(--homo);
+    background: var(--homo-bg);
+  }
+
+  .receipt-flow {
+    list-style: none;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+
+  .receipt-flow li {
+    display: flex;
+    gap: 0.8rem;
+  }
+
+  .step {
+    flex: none;
+    width: 1.4rem;
+    height: 1.4rem;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 0.7rem;
+    color: var(--ink-soft);
+  }
+
+  .receipt-flow li > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+  }
+
+  .call {
+    font-weight: 600;
+    color: var(--accent-deep);
+  }
+
+  .arg {
+    color: var(--ink-soft);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ok {
+    color: var(--homo);
+  }
+
+  .halt {
+    color: #8a5a00;
+  }
+
+  .receipt-result {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.9rem 1rem;
+    border-top: 1px dashed var(--line);
+    background: #f2f7ff;
+  }
+
+  .cae {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cae-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.14em;
+    color: var(--ink-soft);
+  }
+
+  .cae-num {
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+  }
+
+  .cae-vto {
+    font-size: 0.7rem;
+    color: var(--ink-soft);
+  }
+
+  .stamp {
+    font-weight: 600;
+    font-size: 0.8rem;
+    letter-spacing: 0.18em;
+    color: var(--stamp);
+    border: 2px solid var(--stamp);
+    border-radius: 0.3rem;
+    padding: 0.3rem 0.7rem;
+    transform: rotate(-4deg);
+    opacity: 0.85;
+    box-shadow: inset 0 0 0 1.5px var(--paper-raised), inset 0 0 0 2.5px var(--stamp);
+  }
+
+  /* ---------- qué resuelve ---------- */
+  .translate-grid {
+    margin-top: 2.2rem;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .translate-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 1.2rem;
+    align-items: center;
+    padding: 1.1rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .translate-row:first-child {
+    border-top: 1px solid var(--line);
+  }
+
+  .from {
+    color: var(--ink-soft);
+  }
+
+  .translate-arrow {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .to {
+    font-weight: 500;
+  }
+
+  /* ---------- principios ---------- */
+  .cards {
+    margin-top: 2.2rem;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.2rem;
+  }
+
+  .cards article {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 1.4rem 1.5rem;
+  }
+
+  .cards h3 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+
+  .cards p {
+    font-size: 0.93rem;
+    color: var(--ink-soft);
+  }
+
+  /* ---------- tools ---------- */
+  .tool-list {
+    list-style: none;
+    padding: 0;
+    margin-top: 2.2rem;
+    border-top: 1px solid var(--line);
+  }
+
+  .tool-list a {
+    display: grid;
+    grid-template-columns: 10rem 1fr;
+    gap: 1rem;
+    padding: 0.95rem 0.3rem;
+    border-bottom: 1px solid var(--line);
+    text-decoration: none;
+    align-items: baseline;
+  }
+
+  .tool-list a {
+    transition: background 120ms ease, padding-left 160ms ease;
+  }
+
+  .tool-list a:hover {
+    background: #eef4fd;
+    padding-left: 0.8rem;
+  }
+
+  .tool-list code {
+    font-weight: 600;
+    color: var(--accent-deep);
+  }
+
+  .tool-list span {
+    color: var(--ink-soft);
+    font-size: 0.93rem;
+  }
+
+  .all-tools {
+    display: inline-block;
+    margin-top: 1.3rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--accent-deep);
+    text-decoration: none;
+  }
+
+  .all-tools {
+    text-decoration: underline transparent;
+    text-underline-offset: 0.25em;
+    transition: text-decoration-color 160ms ease, color 160ms ease;
+  }
+
+  .all-tools:hover {
+    color: var(--accent);
+    text-decoration-color: var(--accent);
+  }
+
+  /* ---------- cta final ---------- */
+  .cta-final {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2.5rem;
+    flex-wrap: wrap;
+  }
+
+  .cta-final p {
+    margin-top: 0.7rem;
+    color: var(--ink-soft);
+    max-width: 48ch;
+  }
+
+  .cta-final .actions {
+    margin-top: 0;
+  }
+
+  /* ---------- footer ---------- */
+  footer {
+    border-top: 1px solid var(--line);
+    max-width: 72rem;
+    margin: 0 auto;
+    padding: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+  }
+
+  footer nav {
+    display: flex;
+    gap: 1.5rem;
+  }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 56rem) {
+    .hero {
+      grid-template-columns: 1fr;
+      gap: 2.5rem;
+      padding-top: 2.5rem;
+    }
+
+    .cards {
+      grid-template-columns: 1fr;
+    }
+
+    .translate-row {
+      grid-template-columns: 1fr;
+      gap: 0.3rem;
+    }
+
+    .translate-arrow {
+      justify-self: start;
+    }
+
+    .tool-list a {
+      grid-template-columns: 1fr;
+      gap: 0.2rem;
+    }
+
+    section {
+      padding: 3rem 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn {
+      transition: none;
+    }
+
+    .btn:hover {
+      transform: none;
+    }
+  }
+</style>
