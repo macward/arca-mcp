@@ -52,7 +52,7 @@ modelo Pydantic / ArcaError   # output estructurado
 ```
 
 Los errores opacos de ARCA se transforman en estructuras `{ cause, message }`
-legibles. Ver [Errores](/referencia/errores/).
+legibles. Ver [Errores](/arca-mcp/referencia/errores/).
 
 ## Persistencia
 
@@ -63,5 +63,5 @@ Desde la v0.6, el estado crítico se persiste en SQLite bajo `~/.arca-mcp/`:
 - **`audit/audit.jsonl`** — audit log con `fsync` y permisos `0600`.
 - Token WSAA cacheado por CUIT (`WsaaCache`) con refresh proactivo.
 
-Esto es lo que hace que la [idempotencia](/conceptos/human-in-the-loop/#idempotencia)
+Esto es lo que hace que la [idempotencia](/arca-mcp/conceptos/human-in-the-loop/#idempotencia)
 sobreviva un crash a mitad de emisión.

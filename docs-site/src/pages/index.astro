@@ -2,7 +2,9 @@
 // Landing de arca-mcp. Reemplaza la splash de Starlight como raíz del sitio;
 // los docs viven bajo /empezar, /conceptos, /guias y /referencia.
 const GITHUB = 'https://github.com/macward/arca-mcp';
-const DOCS = '/empezar/introduccion/';
+// Prefija rutas internas con el `base` configurado (GitHub Pages sirve bajo /arca-mcp).
+const url = (path: string): string => `${import.meta.env.BASE_URL.replace(/\/$/, '')}${path}`;
+const DOCS = url('/empezar/introduccion/');
 ---
 
 <html lang="es">
@@ -23,12 +25,12 @@ const DOCS = '/empezar/introduccion/';
   </head>
   <body>
     <header class="top">
-      <a class="brand" href="/">
+      <a class="brand" href={url('/')}>
         <span class="brand-mark">◧</span> arca-mcp
       </a>
       <nav>
         <a href={DOCS}>Documentación</a>
-        <a href="/referencia/tools/">Tools</a>
+        <a href={url('/referencia/tools/')}>Tools</a>
         <a href={GITHUB} rel="noopener">GitHub</a>
       </nav>
     </header>
@@ -156,31 +158,31 @@ const DOCS = '/empezar/introduccion/';
         <h2>Todo el ciclo, como tools MCP.</h2>
         <ul class="tool-list">
           <li>
-            <a href="/referencia/setup/">
+            <a href={url('/referencia/setup/')}>
               <code>setup</code>
               <span>Diagnóstico de certificados, CSR y conexión WSAA</span>
             </a>
           </li>
           <li>
-            <a href="/referencia/lookup/">
+            <a href={url('/referencia/lookup/')}>
               <code>lookup</code>
               <span>Catálogos de comprobantes, IVA, monedas y validaciones</span>
             </a>
           </li>
           <li>
-            <a href="/referencia/padron/">
+            <a href={url('/referencia/padron/')}>
               <code>padron</code>
               <span>Consulta de contribuyentes y condición fiscal por CUIT</span>
             </a>
           </li>
           <li>
-            <a href="/referencia/facturacion/">
+            <a href={url('/referencia/facturacion/')}>
               <code>facturacion</code>
               <span>Emisión con draft → validate → confirm, PDF con QR incluido</span>
             </a>
           </li>
         </ul>
-        <a class="all-tools" href="/referencia/tools/">Referencia completa de tools →</a>
+        <a class="all-tools" href={url('/referencia/tools/')}>Referencia completa de tools →</a>
       </section>
 
       <section class="cta-final">
@@ -192,8 +194,8 @@ const DOCS = '/empezar/introduccion/';
           </p>
         </div>
         <div class="actions">
-          <a class="btn btn-primary" href="/empezar/quickstart/">Quickstart</a>
-          <a class="btn btn-ghost" href="/guias/emitir-factura/">Guía: emitir una factura</a>
+          <a class="btn btn-primary" href={url('/empezar/quickstart/')}>Quickstart</a>
+          <a class="btn btn-ghost" href={url('/guias/emitir-factura/')}>Guía: emitir una factura</a>
         </div>
       </section>
     </main>

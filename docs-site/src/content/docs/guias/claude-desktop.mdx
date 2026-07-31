@@ -102,12 +102,12 @@ comprobante (paso `confirm_voucher_creation`).
 <Aside type="tip" title="Seguridad">
   Los certificados solo existen en tu máquina; Claude Desktop los pasa como variables
   de entorno al proceso `arca-mcp`, que nunca los expone en respuestas. Ver
-  [Seguridad](/conceptos/seguridad/).
+  [Seguridad](/arca-mcp/conceptos/seguridad/).
 </Aside>
 
 ## Troubleshooting
 
 - **No aparecen las tools de `arca`** → verificá que el JSON sea válido (sin comas
   sobrantes) y que los paths sean absolutos. Revisá los logs en **Help → Open Logs**.
-- **El servidor arranca pero `setup_doctor` falla** → seguí [Setup y certificados](/guias/setup/).
+- **El servidor arranca pero `setup_doctor` falla** → seguí [Setup y certificados](/arca-mcp/guias/setup/).
 - **`uv: command not found`** → instalá uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`, o usá el path completo al ejecutable.

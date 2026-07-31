@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Cobertura del camino crítico de emisión (`mcp/invoicing.py`): 38% → 82%. Nuevos `tests/mcp/test_confirm_voucher_creation.py` (happy path, idempotencia PENDING/DONE, estados de draft inválidos, fallos de config/WSAA, error y rechazo de WSFE, fallo de `set_done` con preservación del CAE en el audit log, fallo del propio audit log) y `tests/mcp/test_voucher_draft_flow.py` (flujo HITL completo `create → validate → confirm`). Todo con dobles manuales y sin acceso a red
 - Sitio de documentación de uso en `docs-site/` (Astro + Starlight + Svelte 5): guías, conceptos y referencia completa de las 25 tools MCP, con 3 componentes Svelte interactivos (stepper del flujo de emisión, tabla filtrable de tools, comparador de ambientes)
+- Deploy automático del docs-site a GitHub Pages (`https://macward.github.io/arca-mcp/`) vía `.github/workflows/deploy-docs.yml` en cada push a `main` que toque `docs-site/`. Se configura `base: '/arca-mcp'` en Astro y todos los links internos (landing y docs) pasan a respetar el base path
 - Landing page como raíz del docs-site (`docs-site/src/pages/index.astro`): describe el proyecto con estética de comprobante fiscal, hero animado con el flujo `draft → validate → confirm` terminando en CAE estampado, y CTAs a la documentación y a GitHub. Reemplaza la splash genérica de Starlight (`index.mdx`)
 
 ### Changed

@@ -5,8 +5,9 @@ import svelte from '@astrojs/svelte';
 
 // https://astro.build/config
 export default defineConfig({
-  // Ajustá `site` y `base` al deployar (p. ej. GitHub Pages).
+  // GitHub Pages (project page): https://macward.github.io/arca-mcp
   site: 'https://macward.github.io',
+  base: '/arca-mcp',
   integrations: [
     starlight({
       title: 'arca-mcp',
