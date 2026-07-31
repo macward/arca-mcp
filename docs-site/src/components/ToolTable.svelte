@@ -81,28 +81,50 @@
     margin-bottom: 0.7rem;
   }
   input[type='search'] {
+    appearance: none;
+    -webkit-appearance: none;
     flex: 1 1 12rem;
-    padding: 0.4rem 0.7rem;
+    max-width: 20rem;
+    box-sizing: border-box;
+    height: 2.2rem;
+    margin: 0;
+    padding: 0 0.7rem;
     border: 1px solid var(--sl-color-gray-5);
     border-radius: var(--arca-radius, 0.6rem);
     background: var(--sl-color-black);
     color: var(--sl-color-white);
     font-size: var(--sl-text-sm);
     font-family: inherit;
+    line-height: 1;
+  }
+  input[type='search']::-webkit-search-cancel-button,
+  input[type='search']::-webkit-search-decoration {
+    appearance: none;
+    -webkit-appearance: none;
   }
   .tt-layers {
     display: inline-flex;
+    align-items: center;
     gap: 0.25rem;
   }
   .tt-layers button {
-    padding: 0.35rem 0.7rem;
+    appearance: none;
+    -webkit-appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    height: 2.2rem;
+    margin: 0;
+    padding: 0 0.9rem;
     border: 1px solid var(--sl-color-gray-5);
     border-radius: 999px;
     background: transparent;
     color: var(--sl-color-gray-2);
     cursor: pointer;
-    font-size: var(--sl-text-xs);
+    font-size: var(--sl-text-sm);
     font-family: inherit;
+    line-height: 1;
   }
   .tt-layers button.active {
     background: var(--sl-color-accent);
