@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Se reactivan las reglas de lint de ruff (`E`, `F`, `I`, `B904`) que estaban relajadas; imports ordenados y sin usar eliminados en todo `src/`
 - Encadenamiento explícito de excepciones (`raise ... from`) en `certificates/loader.py` y en los validators de fecha/entorno, preservando la causa donde aporta contexto
 
+### Fixed
+- CI roto desde hacía semanas: `ruff` no estaba declarado como dependencia (solo existía en el entorno local), así que `uv run ruff check` fallaba en el runner con "Failed to spawn". Se agrega `ruff>=0.6` al grupo `dev` y el CI deja de instalar el extra `portal` (playwright) que no necesita (`uv sync --all-extras` → `uv sync`)
+- Badges de PyPI del README ("package or version not found"): apuntaban a un paquete no publicado; se reemplazan por un badge estático de Python 3.12+ hasta que haya release en PyPI
+
 ### Removed
 - `Settings.is_production` — property sin uso en el codebase
 - `import base64` sin uso en `wsaa/signing.py`
