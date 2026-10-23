@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Landing page como raíz del docs-site (`docs-site/src/pages/index.astro`): describe el proyecto con estética de comprobante fiscal, hero animado con el flujo `draft → validate → confirm` terminando en CAE estampado, y CTAs a la documentación y a GitHub. Reemplaza la splash genérica de Starlight (`index.mdx`)
 
 ### Changed
+- El sdist pasa a usar una allowlist explícita (`[tool.hatch.build.targets.sdist]`): solo lleva `src/arca_mcp`, `tests`, `README.md`, `LICENSE` y `CHANGELOG.md`. Antes incluía docs internos, config de agentes (`CLAUDE.md`, `AGENTS.md`), workflows de CI, el `docs-site/` y archivos locales no versionados
 - `resolve_runtime_config`: la resolución y validación de `cert_path`/`key_path` (override → Settings, debe existir en el filesystem) se extrae al helper reutilizable `_resolve_path_field`, eliminando la duplicación
 - `playwright` pasa a ser una dependencia opcional del extra `portal` (reservado para la automatización del portal ARCA del roadmap v1.0). Instalación: `pip install "arca-mcp[portal]"`. La instalación base ya no lo descarga
 - `starlette` (usado por el middleware HTTP de `server.py`) ahora se declara explícitamente como dependencia directa en vez de depender de la transitiva de `fastmcp`

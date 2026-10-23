@@ -66,6 +66,17 @@ allow-direct-references = true
 [tool.hatch.build.targets.wheel]
 packages = ["src/arca_mcp"]
 
+# Allowlist explícita: el sdist solo lleva el código, los tests y los archivos
+# que PyPI necesita. Docs internos, config de agentes, CI y docs-site quedan afuera.
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src/arca_mcp",
+    "/tests",
+    "/README.md",
+    "/LICENSE",
+    "/CHANGELOG.md",
+]
+
 [dependency-groups]
 dev = [
     "pypdf>=6.12.0",
