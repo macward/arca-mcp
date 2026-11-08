@@ -1,4 +1,4 @@
-meridian: arca-mcp
+meridian-project: arca-mcp
 
 # MCP ARCA — CLAUDE.md
 
